@@ -1,18 +1,38 @@
 # Lane A Progress — foundation, auth, Shipper vertical, cron, deploy
 
 Owned by **Claude 1**. Step definitions: [`../BuildPlan.md` §6](../BuildPlan.md).
-Status values: `TODO` · `IN_PROGRESS` · `DONE` · `BLOCKED(<gate>)`
 
-| Step | Title | Gate | Status | Commit | Notes |
-|------|-------|------|--------|--------|-------|
-| A0 | Scaffold, database, container, Cloud Build | — | **DONE** | | Lane B's B0 gate is OPEN |
-| A1 | Firebase auth + session | — | **DONE** | | `src/lib/schemas.ts` exists → B4's gate is OPEN |
-| A2 | Onboarding & role routing | — | **DONE** | | next: A3, **blocked on Lane B's B2** |
-| A3 | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | TODO | | |
-| A4 | Create auction | `ui/button.tsx` | TODO | | |
-| A5 | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | TODO | | |
-| A6 | Accept-bid transaction + cron | A5 | TODO | | |
-| A7 | Shipper history + deploy docs | A6 | TODO | | |
+Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own (BuildPlan §1 step 4):
+`[ ]` not started · `[~]` in progress right now · `[x]` done + pushed · `[!]` blocked on a gate
+
+| Step | Status | Title | Gate | Commit | Notes |
+|------|--------|-------|------|--------|-------|
+| A0 | [x] | Scaffold, database, container, Cloud Build | — | `701b8b5` | opened B0 |
+| A1 | [x] | Firebase auth + session | — | `58830ab` | opened B3 + B4 |
+| A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
+| A3 | [!] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | BLOCKED(B2) — skipped per §1, taking A4 |
+| A4 | [~] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | gate OPEN (B1 `c9e599d`); started 2026-08-08 |
+| A5 | [ ] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | needs B2 |
+| A6 | [ ] | Accept-bid transaction + cron | A5 | | |
+| A7 | [ ] | Shipper history + deploy docs | A6 | | |
+
+Out-of-band: `c6fd860` — pinned npm 11 in the Docker deps stage (Cloud Build `npm ci` fix).
+
+## NOT VERIFIED
+_Worklist the §7 verification phase inherits (CLAUDE.md §10.2)._
+
+- **A0** — `npm ci` in a real container was never run; the npm 10/11 resolver mismatch was found only by
+  reading Cloud Build's log. Most likely to be wrong: the `deps`→`builder` copy of `src/generated`, since
+  `.dockerignore` excludes it and only `npm run build`'s own `prisma generate` repopulates it.
+- **A1** — `/login` never rendered with real tokens (B0 landed after), and Google sign-in was never
+  exercised against a real Firebase project. Most likely wrong: the `createSessionCookie` expiry maths, and
+  whether `verifySessionCookie(cookie, true)` throws on a revoked user in a way the `catch` swallows too
+  quietly.
+- **A2** — `/onboarding` not seen at 390×844; the two role cards may overflow with tokens applied. The
+  `setUserRole` reject path (role already set) was never triggered end to end.
+
+## DEPS ADDED
+_Packages this lane installed — the other lane must re-run `npm install`._
 
 ## Resolved versions (A0)
 Next.js **16.3.0** (matches the PRD) · React 19.2.8 · TypeScript 5.9.3 · **Prisma 7.9.1** ·
