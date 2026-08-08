@@ -5,10 +5,19 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
+
+# node:22-alpine ships npm 10.x, but package-lock.json is written by npm 11 on
+# the dev machines. npm 10 misreads npm 11's resolution data and rejects the
+# lockfile with a bogus "Invalid: lock file's picomatch@2.3.2 does not satisfy
+# picomatch@4.0.5" — the same file `npm ci` accepts locally. Pin the major so
+# the resolver that reads the lock is the one that wrote it.
+RUN npm install -g npm@11 --no-audit --no-fund
+
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-# `npm ci` triggers postinstall → prisma generate, which needs the schema above.
+# --ignore-scripts skips postinstall; prisma generate runs explicitly below,
+# after the schema is in place.
 RUN npm ci --ignore-scripts
 RUN npx prisma generate
 

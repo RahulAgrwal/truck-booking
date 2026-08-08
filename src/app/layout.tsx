@@ -1,9 +1,20 @@
-import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import { AppShell } from "@/components/app-shell";
 
 import "./globals.css";
+
+/**
+ * Document metadata and viewport come from Lane B's design module
+ * (docs/progress-B.md, HANDOFF TO A #2). Defining them there keeps themeColor
+ * and the icon set next to the tokens they derive from, while this file — which
+ * Lane A owns — just re-exports them.
+ *
+ * It also adds `formatDetection.telephone: false`, which matters on device:
+ * without it iOS Safari auto-links anything number-shaped, turning ₹ amounts,
+ * kg weights and countdown digits into blue tappable links.
+ */
+export { siteMetadata as metadata, siteViewport as viewport } from "@/lib/design/metadata";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -11,27 +22,6 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
 });
-
-export const metadata: Metadata = {
-  title: "TruckingGO",
-  description: "Find loads. Book trucks. Instantly.",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    title: "TruckingGO",
-    statusBarStyle: "default",
-  },
-};
-
-// Mobile app, not a responsive site: lock the scale and paint under the notch.
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
-  themeColor: "#a04100",
-};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

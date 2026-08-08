@@ -60,6 +60,39 @@ Each is documented in TechnicalDocument.md; Lane B must read §2.2–§2.4 befor
   Promising a setting we will not build is worse than a blunt sentence up front.
 - Visual verification at 390×844 deferred to B0, same as `/login`.
 
+## Cloud Build `npm ci` failure — root cause was npm's version, not the lockfile
+Cloud Build died on `npm ci` with `Invalid: lock file's picomatch@2.3.2 does not satisfy picomatch@4.0.5`
+plus `Missing: picomatch@2.3.2 from lock file` — two claims that contradict each other, which was the clue.
+
+My first diagnosis (a lockfile corrupted by rapid successive `npm install` calls) was **wrong**. I deleted
+and regenerated the lockfile, and `npm ci` passed — but `npm ci --dry-run` also passes against the
+*original* lockfile still on `main`. The file was never corrupt.
+
+**Actual cause: `node:22-alpine` ships npm 10.9.8, while the dev machines run npm 11.4.2.** npm 10 misreads
+the resolution data npm 11 writes into a lockfileVersion-3 file and invents that picomatch conflict. Same
+file, same command, different resolver, different verdict — which is exactly why it only ever failed in the
+cloud.
+
+**Fix:** the Dockerfile's `deps` stage now runs `npm install -g npm@11` before `npm ci`, so the resolver
+reading the lock is the one that wrote it. No lockfile change was needed and none is committed.
+
+⚠️ **If anyone's local npm moves to 12, bump that pin in the same commit**, or this failure comes straight
+back and again only in Cloud Build.
+
+## Lane B handoff items — actioned
+From `docs/progress-B.md` → HANDOFF TO A:
+1. **Shell API** — noted. `A3`/`A5` will compose `TopAppBar` + `AppScreen` + `MobileNav` at page level, and
+   `A4` will pass `hasNav={false}` since the create form ends in a sticky footer button.
+2. **Metadata module wired.** `src/app/layout.tsx` now re-exports `siteMetadata` / `siteViewport` from
+   `@/lib/design/metadata`; the inline `metadata` / `viewport` exports are removed. The
+   `formatDetection.telephone: false` it brings is a real fix — iOS otherwise auto-links ₹ amounts, kg
+   weights and countdown digits into blue tappable phone links.
+3. **`src/app/favicon.ico`** — accepted, not reverted. It was still the Next scaffold's Vercel triangle.
+4. **`NEXT_PUBLIC_SITE_URL` added to `.env.example`** as a public, non-secret var, documented as optional.
+
+Also corrected in BuildPlan §3: it claimed A0 pre-installs `tailwindcss-safe-area`. It does not, and
+Tailwind v4 needs no plugin for `env()` — B0 hand-rolled the safe-area utilities. Lane B was right to flag it.
+
 ## Lane A is now blocked
 `A3` needs `src/components/auction-card.tsx` + `mobile-nav.tsx` (Lane B's **B2**).
 `A4` needs `src/components/ui/button.tsx` + `input.tsx` (Lane B's **B1**).
