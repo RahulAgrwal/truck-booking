@@ -18,7 +18,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
 | B4 | `[x]` | Place a bid | `schemas.ts` | | Stitch `69e048b5…` + `16fc1711…` · all six §5.3 guards |
 | B5 | `[x]` | My Bids | B4 | | hand-built · Mobbin-referenced · **B6 gate is OPEN** |
-| B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
+| B6 | `[~]` | Profile, state coverage, a11y pass | B5 | | hand-built · audits BOTH lanes' screens |
 
 ## B0 notes
 
