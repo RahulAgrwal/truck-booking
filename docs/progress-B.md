@@ -15,7 +15,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B0 | `[x]` | Design tokens, global styles, PWA shell | `package.json` | `7690c9e` | B1 gate is OPEN (`@theme` present) |
 | B1 | `[x]` | UI primitives | `@theme` in `globals.css` | `c9e599d` | **A4's gate is OPEN** — `ui/button.tsx` exists |
 | B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
-| B3 | `[ ]` | Carrier load feed | `session.ts` + `schema.prisma` | | gate already satisfied by A1 · Stitch `36d28947…` |
+| B3 | `[~]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · started 2026-08-09 |
 | B4 | `[ ]` | Place a bid | `schemas.ts` | | gate already satisfied by A1 · Stitch `69e048b5…` + `16fc1711…` |
 | B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
 | B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
