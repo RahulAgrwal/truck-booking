@@ -17,7 +17,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
 | B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
 | B4 | `[x]` | Place a bid | `schemas.ts` | | Stitch `69e048b5…` + `16fc1711…` · all six §5.3 guards |
-| B5 | `[~]` | My Bids | B4 | | hand-built → start at Mobbin |
+| B5 | `[x]` | My Bids | B4 | | hand-built · Mobbin-referenced · **B6 gate is OPEN** |
 | B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
 
 ## B0 notes
@@ -229,6 +229,42 @@ belongs to rather than behind a dismissed overlay.
 rejections come back through `ActionResult` as inline messages and never reach the boundary. Telling
 someone their bid failed when it may have been written would be worse than saying nothing.
 
+## B5 notes
+
+`/carrier/bids` + `loading` + `error` + `bid-tabs`, plus `src/lib/design/bids.ts` (+ 11 tests).
+No Stitch screen exists for this one, so per CLAUDE.md §4.6 it was composed from B1/B2 primitives, with
+Mobbin consulted for shape only:
+[eBay "Bids & offers"](https://mobbin.com/screens/1ca43fc0-557a-4ab5-a55f-58e59eb386a5) (status pill +
+amount + time-remaining per row — closest to this screen),
+[Whatnot "Activity"](https://mobbin.com/screens/111c4243-d56b-4f7c-8dae-762cc224e56f),
+[Vinted "My orders"](https://mobbin.com/screens/1f15685f-4f53-4e26-8aa4-591f2dba803d) (per-tab empty
+states). Reference, not source of truth — the tokens win, and no new visual language was imported.
+
+**The status logic is the substance of this step, so it is pure and tested.** Four situations, and the
+fourth is the one that is easy to get wrong: a **PENDING bid on an expired auction**. Cron sets
+`CLOSED_EXPIRED` and deliberately leaves its bids `PENDING` — nobody won (§5.5). So the bid is still
+`PENDING`, still belongs under the Pending tab, but labelling it "Pending" would promise an outcome that
+can never arrive. It reads **"Auction expired"** instead.
+
+`resolveBidStatus` checks `endTime` directly rather than trusting `auction.status`, for the same reason
+`submitBid`'s guard 4 does: cron lags up to 60s, so a row can read `ACTIVE` after its deadline. A test pins
+that case specifically, and another asserts the four situations are distinguishable **by text alone** —
+which is §7.7's no-colour-alone rule turned into something that can fail.
+
+**Tabs are `Chip`s, not a new segmented control.** The Mobbin references use underline tabs for status and
+pills for sub-filters, but that two-level hierarchy exists because those screens have two levels. This one
+has one, so a second control language would be invention for its own sake. Selection lives in
+`searchParams` so it survives a refresh and a tab is linkable.
+
+Counts for all three tabs come from the single per-carrier query rather than three round trips.
+
+**Every bid is listed, not one row per auction.** §5.6 specifies `where: { carrierId }` with no
+de-duplication, and in a reverse auction a carrier's own successive bids are real history — the screen is
+"My Bids", not "My Auctions". Worth revisiting if a carrier who bids ten times finds the list noisy.
+
+`error.tsx` is beyond `B5`'s file list (which names only `page` and `loading`), but §7.5 requires an error
+state on every list screen, and without one a failure falls through to the root boundary and loses the nav.
+
 ## B0 fix — favicon.ico RGBA (`ecf29fb` handoff from Lane A)
 
 Lane A's Cloud Build died in `next build` on `src/app/favicon.ico`:
@@ -256,17 +292,20 @@ Worth recording as a process point: B0's local pass missed this because the ICO 
 _Verification is deferred to BuildPlan §7 (CLAUDE.md §10). Where the toolchain happened to be usable,
 §10.3 says to run it — so some of this is now green rather than unknown._
 
-**Ran clean over B0 + B1 + B2 + B3** once the other lane's `npm install` finished:
+**Ran clean over B0 – B5** once the other lane's `npm install` finished:
 
 - `npm run typecheck` — **passes** (found and fixed one real defect: `NAV_ITEMS[role][0]` is
   `NavItem | undefined` under `noUncheckedIndexedAccess`)
 - `npm run lint` — **passes**, exit 0
-- `npm run test` — **34 passed**, 3 files (Lane A's 11 formatter tests + B2's 7 nav tests +
-  B3's 16 feed tests)
+- `npm run test` — **54 passed**, 5 files (B2's 7 nav + B3's 16 feed + B5's 11 bid-status, alongside
+  Lane A's formatter and maps tests)
 - discipline greps — no breakpoint variants, no raw hex outside `tokens.ts`, no `any`
 
-Still **not** run: `npm run build` (needs a clean `.next`, which the other lane's dev server holds open in
-this shared checkout) and anything rendered.
+**`npm run build` passes on `main`** — confirmed by Lane A after the favicon fix (`f82856f`), against a
+clean `.next`. That retires the largest open question from B0: the `@theme` block emits and the app
+compiles. It has not been re-run since B3–B5 landed.
+
+Still not done: **nothing has been rendered**. Every remaining item below needs a browser.
 
 ## NOT VERIFIED
 _What is still outstanding for BuildPlan §7.2 — see CLAUDE.md §10.2._
@@ -336,6 +375,15 @@ built against these tokens) and see whether it is styled at all.
     is sticky. Worth checking on a real iOS device rather than DevTools, which fakes keyboard inset.
 22. **`animate-[draw-mark_…]`** on the success tick — an arbitrary animation name plus a `@keyframes` in
     `@theme`. If the tick appears fully drawn with no animation, that pairing is why. Cosmetic.
+
+**B5 — the status logic is tested, so what is left is the data:**
+
+23. **All four situations visible at once.** The seed gives auction 4 two PENDING bids on a
+    `CLOSED_EXPIRED` auction and auction 5 one ACCEPTED + two REJECTED — so between carriers 1–3 every
+    state exists. Check that the expired-auction bids read "Auction expired" and **not** "Pending", which
+    is the one case a reader would otherwise trust.
+24. **Counts on the chips match Prisma Studio** — accept criterion.
+25. **Tab selection surviving a refresh**, and `?tab=won` being linkable.
 
 ## DEPS ADDED
 _Packages this lane installed. The other lane must re-run `npm install` after pulling._
