@@ -25,18 +25,27 @@ const TONE: Record<BadgeTone, string> = {
 
 export function Badge({
   tone = "neutral",
+  shape = "pill",
   className,
   children,
 }: {
   tone?: BadgeTone;
+  /**
+   * `pill` for status badges; `rounded` for the bid-count callout, which the
+   * Shipper Dashboard markup draws with the 0.25rem radius, not a full pill.
+   * A prop rather than a `className` override — `cn` cannot reliably beat a
+   * variant's own class (see `src/lib/design/cn.ts`).
+   */
+  shape?: "pill" | "rounded";
   className?: string;
   children: ReactNode;
 }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-full",
-        "h-6 min-w-6 px-stack-sm font-label-bold text-label-bold",
+        "inline-flex items-center justify-center",
+        shape === "pill" ? "h-6 min-w-6 rounded-full px-stack-sm" : "rounded px-2 py-1",
+        "font-label-bold text-label-bold",
         TONE[tone],
         className,
       )}

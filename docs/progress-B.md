@@ -14,7 +14,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 |------|--------|-------|------|--------|-------|
 | B0 | `[x]` | Design tokens, global styles, PWA shell | `package.json` | `7690c9e` | B1 gate is OPEN (`@theme` present) |
 | B1 | `[x]` | UI primitives | `@theme` in `globals.css` | `c9e599d` | **A4's gate is OPEN** — `ui/button.tsx` exists |
-| B2 | `[~]` | Shared components | B1 | | **opens A3 + A5 gates — push promptly** |
+| B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
 | B3 | `[ ]` | Carrier load feed | `session.ts` + `schema.prisma` | | gate already satisfied by A1 · Stitch `36d28947…` |
 | B4 | `[ ]` | Place a bid | `schemas.ts` | | gate already satisfied by A1 · Stitch `69e048b5…` + `16fc1711…` |
 | B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
@@ -107,41 +107,102 @@ Decisions worth knowing before building on these:
 - **`tokens.ts` is the one file where raw hex is correct.** It is the typed mirror of the `@theme` block
   that BuildPlan `B0` requires; the no-raw-hex rule is about markup. Grepping for hex will always hit it.
 
+## B2 notes
+
+Seven components per BuildPlan `B2`, built from the Stitch markup rather than the screenshots
+(CLAUDE.md §8): `mobile-nav`, `timer`, `auction-card`, `route-row`, `bid-card`, `fab`,
+`polling-refresher`. Supporting: `src/lib/design/nav.ts` (+ tests).
+
+**`Timer` does not reimplement the countdown maths.** Lane A's `formatRemaining` in `src/lib/format.ts`
+already implements §7.3 exactly — the `02h 14m` / `45m 12s` / `00m 09s` formats, the 30-minute urgency
+threshold, clamping an elapsed deadline instead of going negative — and `src/lib/format.test.ts` already
+covers **every boundary §8.1 asks for** (above an hour, below an hour, the final minute, the exact
+threshold, the exact deadline, elapsed, ISO string). B2's "unit tests for the timer formatter" line item is
+therefore **already satisfied upstream**; writing a second copy in Lane B would have been pure duplication.
+`timer.tsx` is the ticking and rendering half only.
+
+What B2 *did* need a test for is the nav active-rule, which is new here and fails silently in both
+directions — Home lit on every screen, or no tab lit at all. `src/lib/design/nav.ts` holds the model and
+`isNavItemActive`; `nav.test.ts` covers root-exact vs prefix matching, segment boundaries
+(`/carrier/bidsomething` must not match `/carrier/bids`), and a sweep asserting at most one tab lights for
+every reachable route. It lives under `src/lib/design/` because `mobile-nav.tsx` imports
+`next/navigation` and cannot load in vitest's node environment — and because `src/lib/` proper is Lane A's.
+
+**Two cards, not one.** `AuctionCard`'s `variant` is a real fork, because the Stitch screens ask different
+questions. Shipper = "how is my auction doing" (LIVE badge, countdown, horizontal route, bid count).
+Carrier = "should I bid on this" (price in `display-price`, expiry chip, vertical route with times, meta
+pills, View & Bid). `RouteRow` gained an `orientation` prop to serve both.
+
+### Deliberate departures from the Stitch markup
+
+Each is a rule in CLAUDE.md that outranks the mockup; §8 says the markup wins on *tokens*, not on the
+hard rules.
+
+| Mockup | Shipped | Why |
+|---|---|---|
+| `bg-[#ff6b00]` on View & Bid | `bg-primary-container` | Raw hex is forbidden (§3.3); it is the same colour |
+| `border: 1px solid #E2E8F0` in the card CSS | `border-surface-variant` | That hex is PRD §6 slate, explicitly superseded |
+| `$1,450` · `42,000 lbs` · `15 mi` | `₹` · Tons · km | The app is INR/metric (§6); the mockup's `$` is known drift |
+| "Est. Payout" | "Current Price" | It is a reverse auction — that number is the price to beat, not an estimate |
+| Filter chips `h-[40px]` | `h-touch-target-min` (48px) | §3.1's floor applies to every interactive element |
+| Timer `12m : 45s` | `12m 45s` | §7.3 fixes the format, and it is what Lane A's tested formatter emits |
+| `hover:bg-*` on nav and buttons | `active:` only | Hover does not exist on a phone (§3.1) |
+| Card shadow `rgba(0,57,115,.08)` | `rgba(0,33,83,.08)` | §4.4's recipe is canonical; the two screens disagree with each other |
+
+Also: the carrier feed's selected chip is `bg-primary`, but TechnicalDocument §6.2 specifies
+`bg-primary-container` for a selected `Chip`, and B1 already shipped it that way. Kept `primary-container`
+— it is the explicit component contract, and the two Stitch screens are internally inconsistent here.
+
+## VERIFICATION STATUS
+_Verification is deferred to BuildPlan §7 (CLAUDE.md §10). Where the toolchain happened to be usable,
+§10.3 says to run it — so some of this is now green rather than unknown._
+
+**Ran clean over B0 + B1 + B2** once the other lane's `npm install` finished:
+
+- `npm run typecheck` — **passes** (found and fixed one real defect: `NAV_ITEMS[role][0]` is
+  `NavItem | undefined` under `noUncheckedIndexedAccess`)
+- `npm run lint` — **passes**, exit 0
+- `npm run test` — **18 passed**, 2 files (Lane A's 11 formatter tests + B2's 7 nav tests)
+- discipline greps — no breakpoint variants, no raw hex outside `tokens.ts`, no `any`
+
 ## NOT VERIFIED
-_Per step: what was skipped, and where it is most likely wrong. This is the worklist BuildPlan §7.2
-inherits — see CLAUDE.md §10.2._
+_What is still outstanding for BuildPlan §7.2 — see CLAUDE.md §10.2._
 
-**B0** — no `typecheck` / `lint` / `build` / `test`; no 390×844 pass; no PWA-install check. (`node_modules`
-was being deleted and reinstalled by the other lane throughout the step, so the toolchain was not runnable
-at commit time; verification is deferred by user direction regardless.) The banned-PRD-hex grep over `src/`
-**was** run and passes.
+**Nothing in B0–B2 has been rendered.** Typecheck, lint and tests pass, but every one of these is a
+*runtime* or *visual* property that no static check can reach. All of it is CSS emission or layout, which
+is why `V4`–`V7` exist.
 
-Most likely to be wrong, in order:
-1. **The `@theme inline` font block.** If `font-headline-md` renders as a system sans instead of Inter,
-   this is the cause — `--font-inter` is defined on `<body>` by `next/font`, and the `inline` keyword is
-   what makes the reference resolve on the element rather than dying at `:root`.
-2. **`pt-safe` / `pb-safe`.** Custom `@utility` names that sit in the same namespace Tailwind's dynamic
-   `pt-*` resolves from. If safe-area padding is simply absent, they lost.
-3. **`AppScreen`'s nested `calc(env(…))` arbitrary values.** If content hides under the app bar or the
-   bottom nav, Tailwind did not emit the class.
-4. **`src/app/favicon.ico` vs `metadata.icons`.** Next's file convention may take precedence over the
-   config-based icon list; the manifest is unaffected either way, so this is cosmetic.
+**Whether the tokens actually emit** — the entire premise of B0. `typecheck` says nothing about whether
+Tailwind produced a `bg-primary-container` rule. Fastest possible check: load `/login` (Lane A, already
+built against these tokens) and see whether it is styled at all.
 
-**B1** — no `typecheck` / `lint` / `build`; nothing rendered. `node_modules` is still half-installed in
-this checkout (534 package dirs, but no `.bin` and no `typescript/lib`), so the toolchain could not run.
-The discipline greps **were** run and pass: no Tailwind breakpoint variants, no raw hex outside
-`tokens.ts`, no `any`, no `@ts-expect-error`.
+1. **The `@theme inline` font block.** If `font-headline-md` renders as a system sans rather than Inter,
+   this is the cause — `--font-inter` is defined on `<body>` by `next/font`, and `inline` is what makes the
+   reference resolve on the element instead of dying at `:root`.
+2. **`pt-safe` / `pb-safe`.** Custom `@utility` names in the same namespace Tailwind's dynamic `pt-*`
+   resolves from. Symptom: safe-area padding simply absent under the notch.
+3. **`AppScreen`'s nested `calc(env(…))`.** Symptom: first card hidden under the app bar, or last card
+   under the bottom nav.
+4. **`@keyframes sheet-up` nested inside `@theme`.** If `animate-sheet-up` does nothing, move the
+   keyframes to top level; the `--animate-*` token stays as it is.
+5. **`z-60` on the `Sheet` overlay.** Relies on v4's bare numeric z-index. Symptom: sheet renders *under*
+   the app bar or bottom nav (both `z-50`). Fallback is `z-[60]`.
+6. **The dashed route rail** — `bg-[linear-gradient(…var(--color-primary)…)]` with `bg-[length:2px_8px]`
+   in `route-row.tsx`. The most fragile arbitrary value in the set. Cosmetic if it fails.
+7. **`ChipRow`'s `[scrollbar-width:none]` / `[&::-webkit-scrollbar]:hidden`.** Cosmetic — a visible
+   scrollbar, nothing worse.
+8. **`src/app/favicon.ico` vs `metadata.icons`.** Next's file convention may take precedence over the
+   config-based icon list. The manifest is unaffected, so this is cosmetic.
 
-Most likely to be wrong, in order:
-1. **`@keyframes sheet-up` nested inside `@theme`.** If `animate-sheet-up` does nothing, Tailwind wanted
-   the keyframes at top level instead — move them out of the block; the `--animate-*` token stays.
-2. **`z-60` in `sheet.tsx`.** Relies on v4's bare numeric z-index. If the sheet renders under the app bar,
-   that is why; `z-[60]` is the fallback.
-3. **`Card`'s `as` prop.** A union of intrinsic element names assigned to a capitalised variable and used
-   as JSX — legal, but the least-exercised typing in the set.
-4. **`EmptyState`'s `cta` union** (`{label, href} | ReactNode`) and its `isCtaLink` guard.
-5. **`ChipRow`'s arbitrary variants** — `[scrollbar-width:none]` and `[&::-webkit-scrollbar]:hidden`.
-   Cosmetic if they fail; a visible scrollbar, nothing worse.
+**Behavioural, needs a browser and a clock:**
+
+9. **`Timer` hydration.** It renders a server-computed label, then re-syncs in `useEffect`;
+   `suppressHydrationWarning` covers the one-second window where the two clocks disagree. Watch for a
+   value that never starts ticking — that means the effect is not running, not that the format is wrong.
+10. **`Timer`'s single `router.refresh()` at zero**, guarded by a ref. A refresh *loop* at expiry is the
+    failure to watch for. Seeded auction 3 ends in ~4 minutes, per §8.2.
+11. **`PollingRefresher` pausing on a hidden tab.** Verify in the Network panel: no requests while
+    backgrounded, one immediately on return.
 
 ## DEPS ADDED
 _Packages this lane installed. The other lane must re-run `npm install` after pulling._
