@@ -25,6 +25,31 @@ ask.
 
 This is the only point in the build where you stop for the user.
 
+### Each lane needs its OWN CHECKOUT
+
+The two Claudes run **at the same time, in two different directories**. They must never share one working
+tree — they would overwrite each other's files mid-edit, and `git add -A` would stage the other lane's
+half-finished work into your commit.
+
+```
+D:\Truck-booking     ← Claude 1 / Lane A
+D:\Truck-booking-B   ← Claude 2 / Lane B   (git clone of the same repo)
+```
+
+Setting up the second checkout:
+
+```bash
+git clone <repo-url> D:/Truck-booking-B
+cp D:/Truck-booking/.env.local D:/Truck-booking-B/.env.local   # gitignored, must be copied by hand
+cd D:/Truck-booking-B && npm install                            # postinstall builds the Prisma client
+```
+
+**Before you do anything else, confirm you are in the right directory for your lane.** If `docs/LANE.md`
+says a different lane than the user just told you, you are in the other agent's checkout — stop and say so.
+They coordinate only through `main`; there is no other shared state.
+
+
+
 ---
 
 ## 1. The loop
