@@ -79,8 +79,8 @@ column, you do not create it, edit it, delete it, or rename it.**
 ### Lane A owns
 ```
 package.json  package-lock.json  tsconfig.json  next.config.ts  eslint.config.*  .gitignore
-Dockerfile  .dockerignore  docker-compose.yml  cloudbuild.yaml  .env.example  vitest.config.ts
-.gcloudignore
+Dockerfile  .dockerignore  cloudbuild.yaml  .gcloudignore  .env.example
+vitest.config.mts  prisma.config.ts
 prisma/**                              (schema, migrations, seed)
 middleware.ts
 src/app/layout.tsx  src/app/page.tsx
@@ -91,6 +91,8 @@ src/lib/prisma.ts  src/lib/session.ts  src/lib/schemas.ts
 src/lib/firebase/**
 src/lib/actions/user.ts  src/lib/actions/auction.ts
 src/lib/format.ts                      (currency, weight, dates)
+src/lib/maps.ts                        (Distance Matrix — SERVER key only)
+src/components/LocationAutocomplete.tsx   ← CARVE-OUT: inside Lane B's tree, owned by A
 docs/progress-A.md  docs/cloud-scheduler.md  docs/deploy.md  docs/gcp-setup.md
 docs/LANE.md          (gitignored — per-checkout, written by whichever agent owns the checkout)
 TechnicalDocument.md  §1–§5, §9
@@ -98,8 +100,8 @@ TechnicalDocument.md  §1–§5, §9
 
 ### Lane B owns
 ```
-tailwind.config.ts  postcss.config.*
-src/app/globals.css
+src/app/globals.css   (Tailwind v4 is CSS-first — the @theme token block lives HERE,
+                       there is no tailwind.config.ts; see TechnicalDocument.md §2.4)
 src/components/**                      (ui primitives + all shared components)
 src/app/(dashboard)/carrier/**
 src/app/(dashboard)/profile/**
@@ -121,16 +123,19 @@ your ledger.
 - **Two Lane-B files are seeded by `A0` and immediately handed over.** `src/app/layout.tsx` (Lane A's) must
   import `./globals.css` and wrap `{children}` in `<AppShell>` for the project to compile at all, so A0
   creates the two files those imports need — as **stubs, in Lane B's tree**:
-  - `src/app/globals.css` — nothing but the `@tailwind` directives.
+  - `src/app/globals.css` — nothing but `@import "tailwindcss";` (Tailwind v4).
   - `src/components/app-shell.tsx` — `({children}) => <>{children}</>`, carrying a `// B0 replaces this` comment.
 
   These are the **only** two files Lane A ever creates outside its own tree, they exist solely so `npm run
   build` passes before B0 lands, and **B0 overwrites both wholesale** — Lane B does not merge with or
   preserve anything in them. After A0, Lane A never touches either file again.
+- **`src/components/LocationAutocomplete.tsx`** — the one file inside `src/components/**` that Lane A owns.
+  It is used only by the shipper's create-auction form (A4); gating A4 on a Lane B step would serialise the
+  lanes for nothing. **Lane B must not create or edit it.** See TechnicalDocument.md §10.3.
 - **`package.json`** — Lane A owns it. Lane B needs a dependency? Do **not** edit `package.json`. Record it
-  in `docs/progress-B.md` under `DEPS REQUESTED`; Lane A picks it up at its next step boundary. B0's stated
-  dependencies (`tailwindcss-safe-area`, Inter via `next/font`, Material Symbols) are pre-installed by A0,
-  so in practice this should never trigger.
+  in `docs/progress-B.md` under `DEPS REQUESTED`; Lane A picks it up at its next step boundary. B0 needs no
+  new packages — Inter comes from `next/font`, Material Symbols is a webfont `<link>` already in
+  `layout.tsx`, and Tailwind v4 handles safe-area insets in CSS — so this should never trigger.
 
 ---
 
@@ -149,7 +154,7 @@ A gate is "does this file exist after `git pull`". Nothing else. No time-based c
 | `A6` | A5 done | |
 | `A7` | A6 done | |
 | `B0` | `package.json` exists | A0 pushed |
-| `B1` | `tailwind.config.ts` exists | B0 done (own lane) |
+| `B1` | `@theme` block present in `src/app/globals.css` | B0 done (own lane) |
 | `B2` | B1 done | |
 | `B3` | `src/lib/session.ts` **and** `prisma/schema.prisma` exist | A1 pushed |
 | `B4` | `src/lib/schemas.ts` exists | A1 pushed |
@@ -207,66 +212,64 @@ Status lives in your ledger, not here.
 
 ---
 
-#### `A0` · Scaffold, database, container
+#### `A0` · Scaffold, database, container, Cloud Build
 **Gate:** none. **This step unblocks Lane B — do it in one pass and push immediately.**
 
-**Creates:** `package.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.ts`,
-`.gitignore`, `.env.example`, `docker-compose.yml`, `Dockerfile`, `.dockerignore`,
-**`cloudbuild.yaml`**, `.gcloudignore`, `docs/gcp-setup.md`,
-`prisma/schema.prisma`, `prisma/seed.ts`, `prisma/migrations/**`, `src/lib/prisma.ts`,
-`src/lib/format.ts`, `src/app/layout.tsx`, `src/app/page.tsx`,
-`src/components/app-shell.tsx` *(placeholder — B0 overwrites)*,
-`docs/LANE.md`, `docs/progress-A.md`, `docs/progress-B.md`.
+**Creates:** `package.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.mts`,
+`.gitignore`, `.env.example`, `Dockerfile`, `.dockerignore`, **`cloudbuild.yaml`**, `.gcloudignore`,
+`docs/gcp-setup.md`, `prisma/schema.prisma`, `prisma.config.ts`, `prisma/seed.ts`,
+`prisma/migrations/**`, `src/lib/prisma.ts`, `src/lib/format.ts` (+ `format.test.ts`),
+`src/app/layout.tsx`, `src/app/page.tsx`,
+stubs handed to Lane B: `src/app/globals.css`, `src/components/app-shell.tsx`,
+`docs/progress-A.md`, `docs/progress-B.md`.
 
 **Build:**
-1. `npx create-next-app@latest` — TypeScript, App Router, Tailwind, ESLint, `src/` dir, import alias `@/*`.
-   No Turbopack flag needed. **Record the resolved Next.js version in TechnicalDocument.md §2.1.**
-   A `.gitignore` already exists (it protects `docs/LANE.md` and `.env*`) — **extend it, never replace it**;
-   if `create-next-app` overwrites it, restore those two entries.
-2. `next.config.ts`: `output: 'standalone'`; throw at config-eval time if
-   `process.env.DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV === 'production'`.
+1. `npx create-next-app@latest` — TypeScript, App Router, Tailwind, ESLint, `src/` dir, alias `@/*`.
+   It refuses to run in a non-empty directory, so scaffold into a temp subdir and move the files up;
+   delete its generated `CLAUDE.md`, `AGENTS.md`, `README.md` and demo SVGs, and **merge** its `.gitignore`
+   into the existing one rather than replacing it (`docs/LANE.md` and `.env*` must survive).
+   **Record the resolved versions in TechnicalDocument.md §2.1.**
+2. `next.config.ts`: `output: 'standalone'`; **warn** (do not throw) when `DEV_AUTH_BYPASS=true` in a
+   production build — see TechnicalDocument.md §4.4 for why the enforcement is at runtime instead.
 3. `tsconfig.json`: `strict: true`, `noUncheckedIndexedAccess: true`.
-4. Install: `prisma`, `@prisma/client`, `zod`, `firebase`, `firebase-admin`, `vitest`,
-   `tailwindcss-safe-area`. Init Shadcn (`npx shadcn@latest init`) but generate **no** components — B1 does
-   that against B0's tokens.
-5. Create the full directory tree from CLAUDE.md §5 with `.gitkeep` where a folder is still empty, so both
-   lanes see the shape immediately.
-6. `prisma/schema.prisma` — exactly TechnicalDocument.md §3.1, indexes included.
-7. `docker-compose.yml` — `postgres:17-alpine`, db `trucking_go`, user/pass `trucking`, port 5432, named
-   volume. This is what makes the loop runnable with zero cloud credentials.
-8. `npm run db:up && npx prisma migrate dev --name init` — commit the generated migration.
-9. `prisma/seed.ts` — every fixture in TechnicalDocument.md §3.4. Idempotent (truncate then insert).
-10. `src/lib/prisma.ts` — global singleton guarded for dev HMR.
-11. `src/lib/format.ts` — `formatINR`, `tonsToKg`, `kgToTons`, `formatRemaining`.
-12. `src/app/layout.tsx` — `next/font` Inter, Material Symbols stylesheet link, viewport
+4. Install `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `zod`, `firebase`, `firebase-admin`,
+   `server-only`, and dev `vitest`, `tsx`, `dotenv`. Do **not** init Shadcn here — B1 generates and rethemes
+   its primitives against B0's tokens.
+5. `prisma/schema.prisma` — TechnicalDocument.md §3.1 verbatim (indexes and the Google Maps route fields
+   included). Prisma 7: generator `prisma-client` with an `output`, datasource carries only `provider`.
+6. `prisma.config.ts` — loads `.env.local` via dotenv and points `datasource.url` at `DIRECT_URL`
+   (migrations need DDL, which a pooler can't run). CLI-only; the app uses the adapter.
+7. `npx prisma migrate dev --name init` against Neon — commit the generated migration.
+8. `prisma/seed.ts` — every fixture in TechnicalDocument.md §3.4. Idempotent (delete, then insert).
+9. `src/lib/prisma.ts` — `server-only`, `PrismaPg` adapter on the pooled `DATABASE_URL`, singleton guarded
+   for dev HMR.
+10. `src/lib/format.ts` — `formatINR` (en-IN, no paise), `tonsToKg`/`kgToTons`/`formatWeight`,
+    `formatRemaining` (absolute-instant countdown, 30-min urgency), `formatRelativeTime`. Unit-test it.
+11. `src/app/layout.tsx` — `next/font` Inter 400/700/800/900, Material Symbols `<link>`, viewport
     `width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover`, `themeColor '#a04100'`,
     manifest link, imports `./globals.css`, wraps `{children}` in `<AppShell>`.
-13. `src/app/page.tsx` — server component; no session yet → redirect `/login`.
-14. `src/components/app-shell.tsx` — placeholder: `({children}) => <>{children}</>` with a `// B0 replaces
-    this` comment.
-15. `src/app/globals.css` — **create the file with only `@tailwind` directives** so the build compiles.
-    B0 owns everything else in it; do not add rules.
-16. `package.json` scripts: exactly the list in CLAUDE.md §2.
-17. `.env.example` — every key from TechnicalDocument.md §2.2.
-18. `Dockerfile` — the three-stage build from TechnicalDocument.md §9.1. `.dockerignore` excludes
-    `node_modules`, `.next`, `.env*`, `docs`, `*.md`.
-19. **`cloudbuild.yaml`** — build → push to Artifact Registry → `prisma migrate deploy` → deploy to Cloud
+12. `src/app/page.tsx` — redirect to `/login`; A1 makes it session-aware.
+13. Stubs for Lane B (§3): `globals.css` containing only `@import "tailwindcss";`, and `app-shell.tsx` as a
+    pass-through. Both carry a `// B0 replaces this` comment.
+14. `package.json` scripts: exactly the list in CLAUDE.md §2.
+15. `.env.example` — every key from TechnicalDocument.md §2.5, including the two Google Maps keys.
+16. `Dockerfile` — the three-stage build from TechnicalDocument.md §9.1. `NEXT_PUBLIC_*` values arrive as
+    build args; server secrets never do. `.dockerignore` excludes `node_modules`, `.next`, `.env*`, `docs`,
+    `*.md`, `src/generated`.
+17. **`cloudbuild.yaml`** — build → push to Artifact Registry → `prisma migrate deploy` → deploy to Cloud
     Run, exactly as TechnicalDocument.md §9.2. All secrets come from **Google Secret Manager**: build-time
-    `availableSecrets.secretManager` for the `NEXT_PUBLIC_FIREBASE_*` values that must be inlined into the
-    client bundle, and `--set-secrets` on the Cloud Run deploy for the runtime server secrets. **No secret
-    value is ever written into the repo, the image, or a substitution.** `.gcloudignore` mirrors
-    `.dockerignore`.
-20. `docs/gcp-setup.md` — the one-time bootstrap: enable APIs, create the Artifact Registry repo, create
-    every Secret Manager secret (TechnicalDocument.md §9.3), and grant the two service accounts their
-    accessor roles. This is what the user runs once before the first `gcloud builds submit`.
-21. `docs/progress-A.md`, `docs/progress-B.md` from the templates in §8 below. `docs/LANE.md` already
-    exists locally (you wrote it at session start); add it to `.gitignore` — it is per-checkout and must
-    never be committed, or the two lanes will fight over its value.
+    `availableSecrets` for the values Next.js inlines into the client bundle, and `--set-secrets` on the
+    Cloud Run deploy for runtime server secrets. **No secret value is ever written into the repo, the
+    image, or a substitution.** `.gcloudignore` mirrors `.dockerignore`.
+18. `docs/gcp-setup.md` — the one-time bootstrap: enable APIs, create the Artifact Registry repo, create
+    every Secret Manager secret (TechnicalDocument.md §9.3), grant both service accounts their roles.
+19. `docs/progress-A.md`, `docs/progress-B.md` from the templates in §8. `docs/LANE.md` already exists
+    locally (written at session start); add it to `.gitignore` — it is per-checkout and must never be
+    committed, or the two lanes will fight over its value.
 
-**Accept:** `npm run build` ✓ · `npm run typecheck` ✓ · `npm run db:up && npm run db:migrate && npm run
-db:seed` ✓ · `npx prisma studio` shows all 5 seeded auctions · `/` redirects to `/login` (404 for now,
-fine) · `docker build .` succeeds and the container serves on :8080 ·
-`gcloud builds submit --config cloudbuild.yaml --no-source` dry-parses without a schema error ·
+**Accept:** `npm run typecheck` ✓ · `npm run lint` ✓ · `npm run test` ✓ · `npm run build` ✓ ·
+`npm run db:migrate && npm run db:seed` ✓ · `npx prisma studio` shows 5 auctions in mixed states ·
+`/` redirects to `/login` · `git check-ignore .env.local docs/LANE.md` matches both ·
 `grep -rn "AIza\|BEGIN PRIVATE KEY" cloudbuild.yaml Dockerfile` returns nothing.
 
 **Commit:** `A0: scaffold Next.js, Prisma schema, Docker, Cloud Build, seed data`
@@ -333,22 +336,49 @@ scroll, nothing hidden behind the nav.
 
 ---
 
-#### `A4` · Create auction
-**Gate:** `src/components/ui/button.tsx` exists.
-**Creates:** `src/app/(dashboard)/shipper/create/page.tsx`, `.../auction-form.tsx`;
-`src/lib/actions/auction.ts` (`createAuction`).
+#### `A4` · Create auction with Google Maps route lookup
+**Gate:** `src/components/ui/button.tsx` and `src/components/ui/input.tsx` exist (B1 pushed).
+**Creates:** `src/app/(dashboard)/shipper/create/page.tsx`, `.../auction-form.tsx`,
+`src/components/LocationAutocomplete.tsx` *(Lane A carve-out, §3)*, `src/lib/maps.ts`,
+`src/lib/actions/auction.ts` (`calculateRouteAndCreateAuction`), `src/lib/maps.test.ts`.
 
-**Build:** Stitch `5351d3902a5149ed91c6e59678e51bd1`. Back arrow + "Post a Load". Scrollable form: Pickup
-Location, Drop-off Location, Material Description, Weight (in Tons). Duration as segmented `<Chip>`s —
-1 / 6 / 12 / 24 Hours, 6 preselected. Sticky footer: full-width "Start Auction Now" with a loading state.
-`createAuction` per §5.2 — zod, `weightTons × 1000`, `endTime = now + hours`, redirect to the new auction.
-Inline field errors from the action's `field` key.
+**Build:** Stitch `5351d3902a5149ed91c6e59678e51bd1` — back arrow + "Post a Load", scrollable form, sticky
+full-width "Start Auction Now". Full spec in TechnicalDocument.md §10.
 
-**Accept:** a submitted form creates a row with the right `weightKg` and `endTime` · invalid input shows
-inline errors and no row is created · the sticky button stays above the home indicator · keyboard open does
-not hide the CTA on 390×844.
+1. **`LocationAutocomplete.tsx`** (§10.3) — `"use client"`, Places Autocomplete via
+   `@vis.gl/react-google-maps`, wrapping the project's own `Input` primitive so it inherits the design
+   system. `componentRestrictions: { country: 'in' }`. Suggestion rows **≥ 48px**, capped at 4 visible so
+   the on-screen keyboard can't bury them, `active:` feedback, no hover-only styling. ~250ms debounce,
+   session tokens, `role="combobox"` + arrow-key navigation. Callback
+   `onPlaceSelect(address, lat, lng)`. **Degraded mode:** with an empty
+   `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` it becomes a plain text input reporting null coordinates — this is
+   what lets the build loop run without a billing-enabled Maps key.
+2. **`src/lib/maps.ts`** — `server-only`. `resolveRoute()` calls Distance Matrix with
+   `GOOGLE_MAPS_SERVER_API_KEY` via native `fetch`, `cache: 'no-store'`, 10s timeout. **Check both status
+   levels** — `json.status` *and* `rows[0].elements[0].status`; an `OK` response can still carry
+   `ZERO_RESULTS` per element. Convert metres→km (1dp) and seconds→minutes. Map each failure to the
+   user-facing message in §10.2 and never echo a raw Google status or response body.
+3. **Form** — two `LocationAutocomplete` instances (Pickup, Drop-off) holding
+   `{ address, lat, lng }` in local state, plus Material Description, Weight (Tons), and duration
+   `<Chip>`s 1/6/12/24 (6 preselected). Submit button shows a spinner while the server resolves the route —
+   this call is slower than a plain insert, so the loading state is required, not optional.
+4. **`calculateRouteAndCreateAuction`** (§5.2) — `requireRole('SHIPPER')`, zod parse, `resolveRoute`,
+   then `auction.create` with `weightKg = weightTons × 1000` and all six route fields. Revalidate
+   `/shipper` and `/carrier`, redirect to the new auction. Return `{ ok: false, error, field }` on failure;
+   never throw.
+5. If the route lookup fails, **still create the auction** with null route fields (§10.5) and surface a
+   non-blocking notice — a load with an unknown distance beats no load.
 
-**Commit:** `A4: create auction form and server action`
+**Accept:** a submitted form creates a row with correct `weightKg`, `endTime`, coordinates, `distanceKm`
+and `estimatedTimeMins` · invalid input shows inline errors and creates nothing · two unroutable points
+produce the friendly `ZERO_RESULTS` message · with the Maps key blank the form still works as plain text
+inputs and creates an auction with null route fields · suggestion rows are ≥ 48px and stay visible with the
+keyboard open at 390×844 · the sticky CTA stays above the home indicator ·
+`grep -rn "GOOGLE_MAPS_SERVER_API_KEY" src/app src/components` returns **nothing** (server key must never
+appear in client-reachable code) · unit tests cover the metres→km and seconds→minutes conversions and each
+error branch.
+
+**Commit:** `A4: create auction with Places autocomplete and Distance Matrix routing`
 
 ---
 
@@ -421,14 +451,17 @@ finds only the documented build placeholder.
 
 #### `B0` · Design tokens, global styles, PWA shell
 **Gate:** `package.json` exists.
-**Creates:** `tailwind.config.ts`, `src/lib/design/tokens.ts`, `public/manifest.json`,
-`public/icons/*`; **overwrites** `src/app/globals.css` and `src/components/app-shell.tsx`.
+**Creates:** `src/lib/design/tokens.ts`, `public/manifest.json`, `public/icons/*`;
+**overwrites** `src/app/globals.css` and `src/components/app-shell.tsx` (both are A0 stubs — replace
+wholesale, preserve nothing).
 
 **Build:**
-1. Port the **exact** token set from CLAUDE.md §4.1–§4.3 into `theme.extend`
-   (`colors`, `borderRadius`, `spacing`, `fontFamily`, `fontSize`). `darkMode: 'class'`. Add
-   `tailwindcss-safe-area`. **No value may differ from the table by a single digit** — and no PRD §6 hex
-   (`#FF6B00`, `#0F172A`, `#F8FAFC`, `#020617`, `#10B981`, `#EF4444`) may appear anywhere.
+1. Port the **exact** token set from CLAUDE.md §4.1–§4.3 into an `@theme { }` block in `globals.css` —
+   **Tailwind v4 is CSS-first and there is no `tailwind.config.ts`** (TechnicalDocument.md §2.4 shows the
+   `--color-* / --spacing-* / --radius-* / --text-*` naming). **No value may differ from the table by a
+   single digit**, and no PRD §6 hex (`#FF6B00`, `#0F172A`, `#F8FAFC`, `#020617`, `#10B981`, `#EF4444`)
+   may appear anywhere. Safe-area insets come from `env(safe-area-inset-*)` utilities you define in the
+   same file — do not add a plugin.
 2. `globals.css`: `@tailwind` layers, tokens mirrored as CSS custom properties, Material Symbols font-face
    + `.material-symbols-outlined` base class, `html/body { overscroll-behavior: none; overflow-x: hidden;
    -webkit-tap-highlight-color: transparent; touch-action: manipulation; }`, `::selection`,
@@ -441,7 +474,7 @@ finds only the documented build placeholder.
 6. `docs/stitch-screens.md` — screen ID → route → owning step (the §6.3 table).
 
 **Accept:** `npm run build` ✓ · a scratch page using `bg-primary-container`, `text-display-price`,
-`p-margin-mobile`, `rounded-lg` renders with the right values · `grep -rn "#FF6B00\|#0F172A\|#10B981\|#EF4444" src/ tailwind.config.ts`
+`p-margin-mobile`, `rounded-lg` renders with the right values · `grep -rn "#FF6B00\|#0F172A\|#10B981\|#EF4444" src/`
 returns nothing · manifest validates and the PWA installs at 390×844 · no horizontal scroll, no body bounce.
 
 **Commit:** `B0: design tokens, global styles, PWA manifest and app shell`
@@ -449,7 +482,7 @@ returns nothing · manifest validates and the PWA installs at 390×844 · no hor
 ---
 
 #### `B1` · UI primitives
-**Gate:** `tailwind.config.ts` exists. **Creates:** `src/components/ui/{button,input,card,chip,badge,avatar,sheet,skeleton,empty-state}.tsx`.
+**Gate:** B0 done (`@theme` block present in `globals.css`). **Creates:** `src/components/ui/{button,input,card,chip,badge,avatar,sheet,skeleton,empty-state}.tsx`.
 
 **Build:** Generate Shadcn primitives where one exists, then **retheme completely** — repoint
 `--primary`/`--destructive` at `primary-container`/`error` and delete every trace of Shadcn's stock slate
@@ -501,8 +534,11 @@ scrollable `<Chip>` row: All / Nearby / Expiring Soon / High Weight (single-sele
 state in the URL via `searchParams` so it survives `router.refresh()`). Feed of
 `<AuctionCard variant="carrier">` — cities, material/weight, red countdown, "View & Bid". Query per
 TechnicalDocument.md §5.6 (`ACTIVE` **and** `endTime > now`). Filters: *Expiring Soon* = `endTime` within
-1h; *High Weight* = `weightKg >= 10000`; *Nearby* = no geo data in the schema, so render the chip
-**disabled with a "Coming soon" affordance** — do not fake a distance. `<MobileNav role="CARRIER"
+1h; *High Weight* = `weightKg >= 10000`; *Nearby* = **still disabled** — `distanceKm` is the *route's* length,
+not the carrier's proximity to the pickup, and we store no carrier location. Render it disabled with a
+"Coming soon" affordance; do not repurpose route distance (TechnicalDocument.md §10.4).
+Cards now show real route data where present: "148 km · ~3h 15m". All six route fields are **nullable** —
+render "Distance unavailable" when they are null, never `undefined km`. `<MobileNav role="CARRIER"
 active="find" />`. `<PollingRefresher />`. Empty state: "No loads available right now".
 
 **Accept:** carrier1 sees the 3 active auctions, expired/assigned ones absent · each chip filters correctly
@@ -518,7 +554,10 @@ horizontally without the page scrolling.
 **Creates:** `src/app/(dashboard)/carrier/auction/[id]/page.tsx`, `loading.tsx`, `error.tsx`,
 `.../bid-form.tsx`, `.../bid-success.tsx`; `src/lib/actions/bid.ts`.
 
-**Build:** Stitch `69e048b55c6a46a78c57fff5d52fdf6e`. Top card: route, material, ticking `<Timer>`. Middle:
+**Build:** Stitch `69e048b55c6a46a78c57fff5d52fdf6e`. Top card: route, material, ticking `<Timer>`, and the
+**route distance + estimated driving time** (`distanceKm`, `estimatedTimeMins`) — this is what lets a
+carrier price the job, so treat it as required content, with a graceful fallback when the fields are null
+(TechnicalDocument.md §10.4). Middle:
 large centered numeric input with a **₹** prefix, `inputMode="decimal"`. Below it: "Current lowest bid is
 ₹42,000" (or "Be the first to bid"). Sticky footer: "Bids cannot be canceled once submitted" + a massive
 full-width "Submit Bid". Confirm in a bottom `Sheet` before writing. Success → Stitch

@@ -57,8 +57,9 @@ Two roles, two entirely separate app surfaces sharing one design system:
 | `SHIPPER` | `/shipper/*` | Post a load, watch bids arrive live, accept one |
 | `CARRIER` | `/carrier/*` | Scan the load feed, check the countdown, submit a bid |
 
-**Current state:** documentation-only. No application code exists yet. `A0` in BuildPlan.md creates the
-scaffold; everything else depends on it.
+**Current state:** `A0` is complete — Next.js 16.3.0 + Prisma 7 + Tailwind v4 scaffold, schema migrated
+and seeded against Neon, `Dockerfile` and `cloudbuild.yaml` ready. Lane B's `B0` gate is open. Live status
+is in `docs/progress-A.md` / `docs/progress-B.md`.
 
 ---
 
@@ -72,19 +73,22 @@ npm run lint             # eslint
 npm run typecheck        # tsc --noEmit — MUST pass before any commit
 npm run test             # vitest (unit: timer math, auction close logic, zod schemas)
 
-npm run db:up            # docker compose up -d  (local Postgres 17 on :5432)
-npm run db:down          # docker compose down
+npm run db:generate      # prisma generate (also runs on postinstall)
 npm run db:migrate       # prisma migrate dev
-npm run db:seed          # reset + reseed demo data
+npm run db:deploy        # prisma migrate deploy (CI/prod)
+npm run db:seed          # reset + reseed demo data — TRUNCATES, see below
 npm run db:studio        # prisma studio
 
 docker build .                                    # verify the Cloud Run image builds
 gcloud builds submit --config cloudbuild.yaml .   # build → migrate → deploy to Cloud Run
 ```
 
-No local Postgres and no cloud credentials? `npm run db:up` gives you a real Postgres 17 in Docker, and
-`DEV_AUTH_BYPASS=true` in `.env.local` gives you a mock session. Both lanes can build and verify the
-entire app with **zero** Firebase/Neon secrets. See TechnicalDocument.md §4.4.
+Development runs against the **Neon** database directly (no Docker — see TechnicalDocument.md §2.2), with
+`DEV_AUTH_BYPASS=true` in `.env.local` supplying a mock session so no Firebase credentials are needed.
+
+> ⚠️ **Both lanes share one Neon database.** `npm run db:seed` truncates all three tables. Reseed only when
+> your own step needs it; if rows vanish mid-step, the other lane reseeded — re-seed and re-check before
+> reporting a bug.
 
 ---
 
@@ -124,8 +128,9 @@ The Stitch designs are 780×1768 mobile frames. The product is a PWA that must f
 ### 3.3 Design tokens only
 
 No raw hex values. No arbitrary spacing (`p-[13px]`). No font sizes outside the type scale. If a token you
-need doesn't exist, it belongs in `tailwind.config.ts` — and that file is Lane B's, so record it as a
-blocker rather than inventing a one-off.
+need doesn't exist, it belongs in the `@theme` block of `src/app/globals.css` — **Tailwind v4 is CSS-first;
+there is no `tailwind.config.ts`** (TechnicalDocument.md §2.4). That file is Lane B's, so record the need
+as a blocker rather than inventing a one-off.
 
 ---
 
@@ -275,7 +280,7 @@ src/
   app/
     layout.tsx                    [A] root: fonts, viewport, PWA meta, shell
     page.tsx                      [A] landing → redirect by session/role
-    globals.css                   [B] tokens as CSS vars, safe-area, overscroll
+    globals.css                   [B] @theme tokens (Tailwind v4), safe-area, overscroll
     (auth)/
       login/page.tsx              [A] Stitch: Splash & Login
       onboarding/page.tsx         [A] Stitch: Role Selection
@@ -293,12 +298,15 @@ src/
     api/cron/route.ts             [A] Cloud Scheduler → close expired auctions
   components/
     ui/*                          [B] Button, Input, Card, Chip, Badge, Avatar, Sheet, Skeleton, EmptyState
+    LocationAutocomplete.tsx      [A] ⚠ carve-out: Lane A owns this one file in B's tree
     mobile-nav.tsx                [B] role-aware bottom nav
     timer.tsx                     [B] countdown from absolute endTime
     auction-card.tsx              [B] used by both dashboards
     bid-card.tsx  route-row.tsx  fab.tsx   [B]
+  generated/prisma/             [A] Prisma 7 client — GITIGNORED, built by postinstall
   lib/
-    prisma.ts                     [A] singleton
+    prisma.ts                     [A] singleton (pg driver adapter)
+    maps.ts                       [A] Distance Matrix — SERVER key, server-only
     session.ts                    [A] getSession / requireSession / requireRole
     firebase/clientApp.ts         [A]
     firebase/adminApp.ts          [A]
@@ -383,6 +391,13 @@ the three undesigned screens. Reference, not source of truth: the tokens in §4 
   otherwise. It is the one route middleware must let through unauthenticated.
 - Only `NEXT_PUBLIC_FIREBASE_*` values may carry the `NEXT_PUBLIC_` prefix. `DATABASE_URL`,
   `FIREBASE_ADMIN_*`, and `CRON_SECRET` must never reach the client bundle — audit before each commit.
+- **Two Google Maps keys, never interchangeable.** `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is the *client* key
+  (Places Autocomplete); it ships in the browser bundle by design and is defended by HTTP-referrer
+  restrictions. `GOOGLE_MAPS_SERVER_API_KEY` is the *server* key (Distance Matrix); it must never carry a
+  `NEXT_PUBLIC_` prefix, never be a Docker build arg, and never be imported into a client component —
+  `NEXT_PUBLIC_` is an instruction to publish the value, not a naming style. Before committing anything
+  that touches Maps, run `grep -rn "GOOGLE_MAPS_SERVER_API_KEY" src/app src/components` and expect no hits.
+  See TechnicalDocument.md §10.1.
 - **Every deployed secret comes from Google Secret Manager** (TechnicalDocument.md §9.3). No secret value
   is ever committed, written into `cloudbuild.yaml`, passed as a Cloud Build substitution, or baked into an
   image layer. Only the four `NEXT_PUBLIC_FIREBASE_*` client keys are build-time args — because Next.js

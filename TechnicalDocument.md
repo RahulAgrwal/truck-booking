@@ -22,6 +22,7 @@ in parallel arrive at the same system. If you are about to invent an answer to s
 | D6 | Session via cookie (§5) | Firebase Admin `createSessionCookie`, not a raw ID token | ID tokens expire in 1h and can't be revoked; session cookies can, and are the documented Firebase+SSR path. |
 | D7 | Next.js `16.3.0` | Pin whatever `npm` resolves at scaffold; record it in §2.1 | Do not stall the build loop on an exact patch version. |
 | D8 | Responsive web app | **Mobile app only** — no breakpoints above the phone frame | User directive; Stitch frames are 780×1768. |
+| D9 | Locations are free-text strings | **Google Maps**: Places Autocomplete (client) + Distance Matrix (server), storing coordinates, `distanceKm` and `estimatedTimeMins` | Later user directive. Free text can't be routed, deduplicated, or priced. Carriers need distance to bid sensibly. Full spec in §10. |
 
 ---
 
@@ -72,22 +73,71 @@ expired auctions → returns `{ closed: n }`. Idempotent; safe to run concurrent
 
 ### 2.1 Stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Framework | Next.js (App Router, RSC, Server Actions) | Target `16.3.0`; **A0 records the resolved version here** |
-| Language | TypeScript, `strict: true` | `noUncheckedIndexedAccess` on |
-| DB | PostgreSQL 17 — Neon (`trucking-go`) in cloud, Docker locally | |
-| ORM | Prisma | `prisma migrate` for schema, no `db push` in CI |
-| Auth | Firebase Auth (Google) + Firebase Admin SDK | session cookies |
-| Styling | Tailwind CSS + Shadcn UI primitives | retheme Shadcn to the M3 tokens |
-| Icons | Material Symbols Outlined (webfont) | **not** Lucide |
-| Font | Inter 400/700/800/900 | `next/font` self-host |
-| Validation | zod | shared schemas in `src/lib/schemas.ts` |
-| Tests | vitest | pure logic only |
-| Container | Docker multi-stage, `output: 'standalone'` | |
-| Host | Cloud Run + Cloud Scheduler | |
+Versions below are the ones **actually resolved** at scaffold time in `A0` (2026-08-08), not aspirations.
 
-### 2.2 Environment variables
+| Layer | Choice | Resolved | Notes |
+|---|---|---|---|
+| Framework | Next.js App Router, RSC, Server Actions | **16.3.0** | matches the PRD exactly; Turbopack build |
+| UI runtime | React | 19.2.8 | |
+| Language | TypeScript `strict` + `noUncheckedIndexedAccess` | 5.9.3 | |
+| DB | PostgreSQL 17 — Neon, database `trucking_go` | — | see §2.2 |
+| ORM | Prisma | **7.9.1** | major API change vs the PRD — see §2.3 |
+| DB driver | `@prisma/adapter-pg` | 7.x | required by Prisma 7 |
+| Auth | Firebase Auth (Google) + Admin SDK | 12.x / 14.x | session cookies |
+| Styling | Tailwind CSS | **v4** | **CSS-first — there is no `tailwind.config.ts`**, see §2.4 |
+| Icons | Material Symbols Outlined (webfont) | — | **not** Lucide |
+| Font | Inter 400/700/800/900 | `next/font` | self-hosted, `--font-inter` |
+| Validation | zod | 4.x | shared schemas in `src/lib/schemas.ts` |
+| Tests | vitest | 4.x | pure logic only; config is `vitest.config.mts` |
+| Container | Docker multi-stage, `output: 'standalone'` | node:22-alpine | |
+| Host | Cloud Run + Cloud Build + Cloud Scheduler | — | §9 |
+
+### 2.2 Local database — Neon, not Docker
+
+The plan originally specified a Docker Postgres for local work. **Docker is not installed on the build
+machine**, and a local PostgreSQL 17 exists but on port 5433 behind `scram-sha-256`. We use the **Neon
+cloud database directly** for local development, so there is no `docker-compose.yml` and no `db:up` script.
+
+> **Both lanes share one database.** `npm run db:seed` truncates all three tables. If Lane B reseeds while
+> Lane A is mid-verification, Lane A's rows vanish under it. Reseed only when your own step needs it, and
+> if data looks wrong mid-step, reseed and re-check before reporting a bug.
+
+### 2.3 Prisma 7 — three breaks from the PRD's schema
+
+The PRD was written against Prisma 5/6. Prisma 7 changes the contract:
+
+1. **`url` and `directUrl` are no longer allowed in `schema.prisma`.** The datasource block carries only
+   `provider`. Connection URLs move to `prisma.config.ts`.
+2. **The client requires a driver adapter.** `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`.
+3. **The generator is `prisma-client`** (not `prisma-client-js`) and needs an explicit `output`. The client
+   is generated to `src/generated/prisma`, which is **gitignored** and rebuilt by the `postinstall` hook —
+   so a fresh `npm install` is all either lane needs.
+
+`prisma.config.ts` is **CLI-only** (migrate / seed / studio) and deliberately points at `DIRECT_URL`:
+migrations issue DDL, which a pooled connection cannot run reliably. The running app never reads that file
+— it connects through the adapter with the pooled `DATABASE_URL`.
+
+### 2.4 Tailwind v4 — there is no `tailwind.config.ts`
+
+Next 16 scaffolds **Tailwind v4**, which is CSS-first. Design tokens are declared in `src/app/globals.css`
+inside an `@theme { }` block, not in a JS config object. The token *values* in CLAUDE.md §4 are unchanged —
+only where they are written changes:
+
+```css
+@theme {
+  --color-primary-container: #ff6b00;   /* → bg-primary-container, text-primary-container */
+  --spacing-stack-md: 16px;             /* → p-stack-md, gap-stack-md */
+  --radius-lg: 0.5rem;                  /* → rounded-lg */
+  --text-display-price: 32px;           /* → text-display-price */
+  --text-display-price--line-height: 40px;
+  --text-display-price--font-weight: 900;
+  --text-display-price--letter-spacing: -0.02em;
+}
+```
+
+`globals.css` is Lane B's file, so B0 owns this. Lane A's `A0` leaves only `@import "tailwindcss";` in it.
+
+### 2.5 Environment variables
 
 | Var | Scope | Required | Purpose |
 |---|---|---|---|
@@ -100,6 +150,8 @@ expired auctions → returns `{ closed: n }`. Idempotent; safe to run concurrent
 | `FIREBASE_ADMIN_PROJECT_ID` | server | yes | |
 | `FIREBASE_ADMIN_CLIENT_EMAIL` | server | yes | |
 | `FIREBASE_ADMIN_PRIVATE_KEY` | server | yes | newlines escaped as `\n` |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | client | yes | Places Autocomplete — restrict by HTTP referrer |
+| `GOOGLE_MAPS_SERVER_API_KEY` | server | yes | Distance Matrix — **never** exposed to the browser |
 | `CRON_SECRET` | server | yes | bearer token for `/api/cron` |
 | `DEV_AUTH_BYPASS` | server | dev only | `true` mocks a session — **must fail the build in production** |
 | `DEV_BYPASS_ROLE` | server | dev only | `SHIPPER` \| `CARRIER` for the mock session |
@@ -112,9 +164,19 @@ expired auctions → returns `{ closed: n }`. Idempotent; safe to run concurrent
 
 ### 3.1 Schema
 
-PRD models and fields verbatim; the only additions are indexes (D2).
+PRD models and fields verbatim; the only additions are indexes (D2). The `datasource` block differs from
+the PRD because Prisma 7 forbids `url`/`directUrl` there — see §2.3.
 
 ```prisma
+generator client {
+  provider = "prisma-client"          // Prisma 7 name; "prisma-client-js" is gone
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"             // URLs live in prisma.config.ts
+}
+
 enum Role          { SHIPPER CARRIER }
 enum AuctionStatus { ACTIVE CLOSED_EXPIRED COMPLETED_ASSIGNED }
 enum BidStatus     { PENDING ACCEPTED REJECTED }
@@ -258,7 +320,14 @@ When `DEV_AUTH_BYPASS=true` **and** `NODE_ENV !== 'production'`, `getSession()` 
 built from the seeded `shipper1@demo.test` / `carrier1@demo.test` (selected by `DEV_BYPASS_ROLE`) without
 touching Firebase. This is what lets both lanes build and verify every screen with no cloud credentials.
 
-`next.config` **must throw at build time** if `DEV_AUTH_BYPASS === 'true' && NODE_ENV === 'production'`.
+**Enforcement is at runtime, not build time.** `getSession()` ignores `DEV_AUTH_BYPASS` entirely when
+`NODE_ENV === 'production'` — that check is the security boundary and nothing can bypass it.
+`next.config.ts` only **warns**: `next build` sets `NODE_ENV=production` even for the local production
+build that every step's Definition of Done requires, so throwing there would break the build loop for a
+developer doing nothing wrong. Defence in depth: `.dockerignore` excludes `.env*.local`, so the value never
+reaches the image, and the Cloud Run deploy never sets it.
+
+*(Revised in A0 — the original plan said "throw at build time", which blocked `npm run build` locally.)*
 
 ---
 
@@ -279,24 +348,38 @@ Effect: user.update({ role })
 After:  revalidatePath('/', 'layout'); redirect to the role's home
 ```
 
-### 5.2 `createAuction` — `actions/auction.ts` *(Lane A)*
+### 5.2 `calculateRouteAndCreateAuction` — `actions/auction.ts` *(Lane A)*
+
+Replaces the plain `createAuction` from the original plan: the shipper now picks real places, and the
+server resolves the route before writing the row (§10).
 
 ```ts
 CreateAuctionSchema = z.object({
-  pickupLocation:  z.string().trim().min(2).max(120),
-  dropoffLocation: z.string().trim().min(2).max(120),
+  pickupLocation:  z.string().trim().min(2).max(200),
+  pickupLat:       z.number().min(-90).max(90),
+  pickupLng:       z.number().min(-180).max(180),
+  dropoffLocation: z.string().trim().min(2).max(200),
+  dropoffLat:      z.number().min(-90).max(90),
+  dropoffLng:      z.number().min(-180).max(180),
   materialDetails: z.string().trim().min(2).max(240),
   weightTons:      z.coerce.number().positive().max(100),
   durationHours:   z.union([z.literal(1), z.literal(6), z.literal(12), z.literal(24)]),
 })
 
-Guards: requireRole('SHIPPER')
+Guards: requireRole('SHIPPER'); zod parse
+Route:  resolveRoute(pickup, dropoff)   // §10.2 — Distance Matrix, server key only
 Effect: auction.create({ shipperId: session.userId,
                          weightKg: weightTons * 1000,          // D4
                          endTime: new Date(Date.now() + durationHours * 3_600_000),
+                         pickupLat, pickupLng, dropoffLat, dropoffLng,
+                         distanceKm, estimatedTimeMins,
                          status: 'ACTIVE' })
 After:  revalidatePath('/shipper'); revalidatePath('/carrier'); redirect(`/shipper/auction/${id}`)
 ```
+
+Coordinates are validated as numbers in range but are otherwise **client-supplied and therefore untrusted**
+— they only ever feed the Distance Matrix lookup and the display. They never grant access to anything, so
+a forged coordinate costs the forger a wrong distance on their own auction and nothing more.
 
 ### 5.3 `submitBid` — `actions/bid.ts` *(Lane B)*
 
@@ -691,10 +774,15 @@ Every secret is created once (see `docs/gcp-setup.md`, written in A0) and refere
 | `FIREBASE_ADMIN_PROJECT_ID` | runtime | `--set-secrets` | service-account project id |
 | `FIREBASE_ADMIN_CLIENT_EMAIL` | runtime | `--set-secrets` | service-account email |
 | `FIREBASE_ADMIN_PRIVATE_KEY` | runtime | `--set-secrets` | PEM, real newlines — see below |
+| `GOOGLE_MAPS_API_KEY` | build | `availableSecrets` → build-arg | → `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (Places) |
+| `GOOGLE_MAPS_SERVER_API_KEY` | runtime | `--set-secrets` | Distance Matrix — server only |
 | `CRON_SECRET` | runtime | `--set-secrets` | random 32-byte hex bearer token |
 
-The four `FIREBASE_*` client keys are not confidential (they ship in the browser bundle) but are stored in
-Secret Manager anyway so that one mechanism supplies every value and nothing lands in git.
+The four `FIREBASE_*` client keys and `GOOGLE_MAPS_API_KEY` are not confidential — they ship in the browser
+bundle — but are stored in Secret Manager anyway so that one mechanism supplies every value and nothing
+lands in git. **`GOOGLE_MAPS_SERVER_API_KEY` is the opposite**: it is a runtime-only secret and must never
+become a build arg, or it would be baked into an image layer and, worse, be one typo away from a
+`NEXT_PUBLIC_` prefix that would publish it.
 
 **`FIREBASE_ADMIN_PRIVATE_KEY`**: store the PEM with **real newlines** in Secret Manager
 (`gcloud secrets create ... --data-file=key.pem`), and have `adminApp.ts` tolerate both forms —
@@ -762,3 +850,110 @@ both service accounts hold `secretAccessor` · Firebase authorized domains inclu
 `CRON_SECRET` is not the dev value · `prisma migrate deploy` succeeded in the build log · `/api/cron`
 returns 401 without a bearer · `docker history` shows no server secret in any layer · no `NEXT_PUBLIC_`
 variable carries a server secret · PWA installs and launches standalone on a real phone.
+
+---
+
+## 10. Google Maps integration *(Lane A owns §10)*
+
+Locations stopped being free text (decision D9). The shipper picks real places, and the server resolves the
+route before the auction row is written.
+
+### 10.1 The two keys, and why they must never be confused
+
+| | Client key | Server key |
+|---|---|---|
+| Env var | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | `GOOGLE_MAPS_SERVER_API_KEY` |
+| API | Places Autocomplete + Geocoding | Distance Matrix |
+| Runs in | The browser | Node, inside a Server Action |
+| Visible to users | **Yes** — inlined into the JS bundle | **Never** |
+| Restriction | HTTP referrer (your domains) + Places API only | Distance Matrix API only, IP-restricted if possible |
+| Secret Manager | `GOOGLE_MAPS_API_KEY` (build-time) | `GOOGLE_MAPS_SERVER_API_KEY` (runtime) |
+
+**The rule: never give the server key a `NEXT_PUBLIC_` prefix, never pass it as a Docker build arg, never
+import it into a client component.** A `NEXT_PUBLIC_` prefix is not a naming convention — it is an
+instruction to Next.js to publish the value. The client key is *designed* to be public and is defended by
+referrer restrictions instead; the server key has no such defence and would be usable by anyone who viewed
+source. Enforced by the audit in CLAUDE.md §9 and the §9.7 release checklist.
+
+### 10.2 `resolveRoute` — the Distance Matrix call
+
+Lives in `src/lib/maps.ts` (Lane A), marked `server-only`. Called by
+`calculateRouteAndCreateAuction` (§5.2) before the insert.
+
+```ts
+const url = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
+url.searchParams.set("origins",      `${pickupLat},${pickupLng}`);
+url.searchParams.set("destinations", `${dropoffLat},${dropoffLng}`);
+url.searchParams.set("mode",   "driving");
+url.searchParams.set("units",  "metric");
+url.searchParams.set("region", "in");
+url.searchParams.set("key",    process.env.GOOGLE_MAPS_SERVER_API_KEY!);
+
+const res  = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+const json = await res.json();
+```
+
+Convert to the units we store: `distanceKm = element.distance.value / 1000` (metres → km, rounded to 1dp),
+`estimatedTimeMins = Math.round(element.duration.value / 60)` (seconds → minutes).
+
+**Two status levels must both be checked** — this is the classic Distance Matrix trap. The top-level
+`json.status` reports whether the *request* worked; `json.rows[0].elements[0].status` reports whether
+*that particular pair* was routable. A response can be `status: "OK"` with an element status of
+`ZERO_RESULTS`, and reading only the top level silently produces `distanceKm = undefined`.
+
+| Condition | User-facing message |
+|---|---|
+| `json.status === "REQUEST_DENIED"` / `"INVALID_REQUEST"` | "Could not calculate the route. Please try again." (log the real reason server-side) |
+| `json.status === "OVER_QUERY_LIMIT"` | "Route lookup is busy. Please try again in a moment." |
+| element `ZERO_RESULTS` / `NOT_FOUND` | **"We couldn't find a driving route between these locations. Please check the pickup and drop-off points."** |
+| fetch throws / times out | "Could not reach the routing service. Please try again." |
+
+Never surface a raw Google status string or the response body — those can echo the key back. The action
+returns `{ ok: false, error, field }` like any other; it does not throw.
+
+### 10.3 `LocationAutocomplete` — the client component
+
+**Ownership exception.** It lives at `src/components/LocationAutocomplete.tsx` — inside Lane B's
+`src/components/**` tree, but **owned by Lane A**, because it is only used by the shipper's create-auction
+form (A4) and gating A4 on a Lane B step would serialise the two lanes for no benefit. It is the single
+carve-out; the rule in BuildPlan.md §3 otherwise stands. Lane B must not edit this file.
+
+- `"use client"`. Loads the Maps JS API with the **Places** library via `@vis.gl/react-google-maps`
+  (actively maintained, React 19 compatible; `@react-google-maps/api` is the fallback).
+- Renders the project's own `Input` primitive — not Google's stock widget — so it inherits the design
+  system. The suggestion list is a plain absolutely-positioned list beneath it.
+- **India only:** `componentRestrictions: { country: 'in' }`. Bias toward the user's region where available.
+- **Mobile ergonomics (non-negotiable, CLAUDE.md §3.1):** every suggestion row is **≥ 48px tall**
+  (`min-h-touch-target-min`, `px-margin-mobile py-stack-sm`), with `active:` press feedback and no
+  hover-only styling. The list must not be so tall it hides behind the on-screen keyboard — cap it at 4
+  visible rows and scroll inside.
+- Debounce input ~250ms. Session tokens on the Autocomplete request keep billing to one session per pick.
+- On selection, resolve `lat`/`lng` from the place's `geometry.location` — prefer the value the Places
+  response already carries; only fall back to a Geocoder call when it's absent (an extra call costs money
+  and latency).
+- Callback: `onPlaceSelect(address: string, lat: number, lng: number)`.
+- Keyboard/a11y: `role="combobox"` + `aria-expanded` + `aria-activedescendant`, arrow-key navigation,
+  `Escape` closes.
+- **Degraded mode:** when `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is empty (which is the case for both build
+  lanes locally), the component falls back to a plain text input and reports `lat`/`lng` as `null`. The
+  form still submits; `resolveRoute` is skipped and the route fields stay null. Neither lane is blocked on
+  a billing-enabled Maps key, and the seed data already carries realistic coordinates and distances.
+
+### 10.4 Where the route data surfaces
+
+- **Carrier feed** (`B3`) — real route distance on each card: "Mumbai, MH → Pune, MH · 148 km · ~3h 15m".
+  This replaces the mockup's invented "15 miles away".
+- **Carrier bid screen** (`B4`) — distance and duration in the summary card, so a carrier can price the
+  job. This is the main reason the feature exists.
+- **Shipper auction detail** (`A5`) — same summary line.
+- The **"Nearby" filter chip stays disabled** (`B3`). `distanceKm` is the *route's* length, not the
+  carrier's proximity to the pickup — we still store no carrier location. Do not repurpose it; showing a
+  wrong "near you" is worse than showing nothing.
+
+### 10.5 Cost and failure posture
+
+Distance Matrix is billed per element. One call per auction creation is negligible; calling it on every
+feed render would not be. **Resolve once, at creation, and store the result** — never recompute on read.
+If the lookup fails, the auction is still creatable with null route fields rather than blocking the
+shipper: a load with an unknown distance is worth more than no load at all. Consumers must treat all six
+route fields as nullable and render a graceful fallback ("Distance unavailable").

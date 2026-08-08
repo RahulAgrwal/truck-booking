@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/*
+  A0 STUB — Lane B replaces this file wholesale in step B0.
+
+  B0 defines the full Material-3 token set here via Tailwind v4's `@theme`
+  (colors, spacing, radii, the Inter type scale), loads Material Symbols, and
+  adds the mobile shell rules: overscroll-behavior, overflow-x, tap-highlight,
+  touch-action, safe areas and prefers-reduced-motion.
+
+  Tokens are transcribed in CLAUDE.md §4. Note Tailwind v4 has no
+  tailwind.config.ts — tokens are CSS-first, and they live here.
+*/

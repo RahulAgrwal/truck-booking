@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Auction" ADD COLUMN     "distanceKm" DOUBLE PRECISION,
+ADD COLUMN     "dropoffLat" DOUBLE PRECISION,
+ADD COLUMN     "dropoffLng" DOUBLE PRECISION,
+ADD COLUMN     "estimatedTimeMins" INTEGER,
+ADD COLUMN     "pickupLat" DOUBLE PRECISION,
+ADD COLUMN     "pickupLng" DOUBLE PRECISION;

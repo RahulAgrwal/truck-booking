@@ -1,0 +1,94 @@
+// TruckingGO data model.
+// Models and fields are verbatim from TruckingGO_Master_PRD.md §3.
+// The only additions are the indexes required by the app's list queries
+// (TechnicalDocument.md §3.1, decision D2) — additive, no semantic change.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7: connection URLs live in prisma.config.ts, not here.
+// The runtime client connects through the pg driver adapter (src/lib/prisma.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SHIPPER
+  CARRIER
+}
+
+enum AuctionStatus {
+  ACTIVE
+  CLOSED_EXPIRED
+  COMPLETED_ASSIGNED
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  firebaseUid  String   @unique
+  email        String   @unique
+  name         String
+  profileImage String?
+  role         Role? // Nullable until onboarding completes
+  createdAt    DateTime @default(now())
+
+  auctions Auction[] @relation("ShipperAuctions")
+  bids     Bid[]     @relation("CarrierBids")
+}
+
+model Auction {
+  id              String        @id @default(uuid())
+  shipperId       String
+  pickupLocation  String
+  dropoffLocation String
+  materialDetails String
+  weightKg        Float
+  status          AuctionStatus @default(ACTIVE)
+  endTime         DateTime
+  createdAt       DateTime      @default(now())
+
+  // Google Maps route data (TechnicalDocument.md §10).
+  // Coordinates come from the client-side Places Autocomplete; distance and
+  // duration are resolved server-side via the Distance Matrix API at creation.
+  // Nullable so auctions created before this feature (and any future non-geocoded
+  // path) remain valid.
+  pickupLat         Float?
+  pickupLng         Float?
+  dropoffLat        Float?
+  dropoffLng        Float?
+  distanceKm        Float?
+  estimatedTimeMins Int?
+
+  shipper User  @relation("ShipperAuctions", fields: [shipperId], references: [id])
+  bids    Bid[]
+
+  // Carrier feed (status + endTime) and the cron expiry sweep.
+  @@index([status, endTime])
+  // Shipper dashboard and history.
+  @@index([shipperId, createdAt])
+}
+
+model Bid {
+  id        String    @id @default(uuid())
+  auctionId String
+  carrierId String
+  amount    Float
+  status    BidStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+
+  auction Auction @relation(fields: [auctionId], references: [id])
+  carrier User    @relation("CarrierBids", fields: [carrierId], references: [id])
+
+  // Bid list ordered lowest-first, and the "Best Price" lookup.
+  @@index([auctionId, amount])
+  // Carrier's "My Bids" screen.
+  @@index([carrierId, createdAt])
+}

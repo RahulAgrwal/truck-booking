@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+docs
+*.md
+!README.md
+.env
+.env.local
+.env*.local
+coverage
+src/generated
+Dockerfile
+.dockerignore
+.gcloudignore
+cloudbuild.yaml
