@@ -157,6 +157,10 @@ need doesn't exist, it belongs in the `@theme` block of `src/app/globals.css` �
 there is no `tailwind.config.ts`** (TechnicalDocument.md §2.4). That file is Lane B's, so record the need
 as a blocker rather than inventing a one-off.
 
+Two arbitrary-value patterns **are** sanctioned, because no token can express them: the fixed-bar offsets
+(`pt-[calc(env(safe-area-inset-top,0px)+48px+24px)]`) and the FAB's position. Both come from the §4.4
+recipes. Everything else arbitrary is a mistake.
+
 ---
 
 ## 4. Design system
@@ -339,7 +343,8 @@ src/
       user.ts                     [A] setUserRole
       auction.ts                  [A] createAuction, acceptBid
       bid.ts                      [B] submitBid
-    design/                       [B] token constants shared with TS
+    design/tokens.ts              [B] token constants shared with TS
+    design/metadata.ts            [B] document metadata + viewport, re-exported by layout.tsx
   middleware.ts                 [A] session gate (must be under src/, not repo root)
 prisma/schema.prisma              [A]
 ```
@@ -381,12 +386,19 @@ Both lanes commit directly to `main`. There are no feature branches and no PRs.
 
 ```bash
 git pull --rebase origin main     # before you start a step
-# ... implement, verify ...
-git add -A
+# ... implement ...               # verification is deferred — see §10
+git add -A                        # safe ONLY in your own checkout (BuildPlan.md §0)
 git commit -m "A3: shipper dashboard"     # "<StepID>: <short summary>"
 git pull --rebase origin main     # again — the other lane has been pushing
 git push origin main
 ```
+
+**Push as soon as a step is done, not when you feel like it.** Every gate in BuildPlan.md §4 is "does this
+file exist after `git pull`" — an unpushed commit is an invisible one, and the other lane is idling on it.
+`B2` and `A1` are the two that most directly unblock the other side.
+
+If `git add -A` would stage a file you do not own, you are in the other lane's checkout — stop (BuildPlan.md
+§0). In your own checkout there is nothing of theirs to catch.
 
 **Rebase conflict recovery** (full procedure in BuildPlan.md §5): a conflict means you touched a file the
 other lane owns. Take **their** version of anything you don't own, keep yours only for files in your
@@ -435,19 +447,57 @@ the three undesigned screens. Reference, not source of truth: the tokens in §4 
 
 ## 10. Definition of Done
 
-A step is done only when **all** of these hold:
+> **The project is in the BUILD phase.** Per-step toolchain verification is **deferred to the end** by
+> explicit user direction. Both lanes build straight through; a single dedicated verification phase
+> (BuildPlan.md §7) runs `typecheck` / `lint` / `build` / `test` and the device sweep once, against `main`,
+> after both lanes are code-complete.
+>
+> The reason is throughput and independence: the two lanes share one `package.json` and one Neon database,
+> so a red build is very often the *other* lane's half-landed step rather than yours — and chasing it
+> serialises two agents that are supposed to run in parallel.
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean
-- [ ] `npm run build` succeeds
-- [ ] Screen verified at **390×844**, no horizontal scroll, all tap targets ≥ 48px
-- [ ] Loading, empty, and error states exist for any list
-- [ ] No `md:`/`lg:` breakpoints, no raw hex, no `any`
-- [ ] Only files in your lane's ownership list were changed
-- [ ] `docs/progress-<lane>.md` updated with status + commit sha
+### 10.1 Build phase — what "done" means right now
+
+A step is done when **all** of these hold:
+
+- [ ] The step's own **Build** items in BuildPlan.md §6 are implemented, in full
+- [ ] Loading, empty, and error states exist for any list *(write them now; they are the easiest thing to
+      forget and the most expensive to retrofit)*
+- [ ] No `md:`/`lg:` breakpoints, no raw hex, no `any`, no arbitrary spacing
+- [ ] Only files in your lane's ownership list were changed (BuildPlan.md §3)
+- [ ] `docs/progress-<lane>.md` updated: status, commit sha, **and a `NOT VERIFIED` line** naming what you
+      could not check and where you think it is most likely to be wrong
 - [ ] Committed and pushed to `main`
 
 Then immediately begin the next eligible step. Do not stop. Do not wait for the user.
+
+**These checks are not deferred** — they cost nothing and catch what a build never would:
+
+- `grep -rn "GOOGLE_MAPS_SERVER_API_KEY" src/app src/components` → no hits (§9)
+- no `NEXT_PUBLIC_` prefix on `DATABASE_URL`, `FIREBASE_ADMIN_*`, or `CRON_SECRET` (§9)
+- no secret value committed to any file
+
+### 10.2 The `NOT VERIFIED` line is the whole trade
+
+Deferring verification only works if the final pass inherits a **worklist** instead of a blank page.
+Every step's ledger entry therefore records what was skipped and where the risk sits. One or two lines:
+
+```markdown
+**NOT VERIFIED (B0):** no typecheck/lint/build; no 390×844 pass; no PWA install check.
+Most likely to be wrong: the `@theme inline` font block (if `font-headline-md` falls back to a
+system sans, that is the cause); `pt-safe` colliding with Tailwind's dynamic `pt-*`.
+```
+
+A step that says "not verified" and nothing else has thrown the information away. Name the suspects.
+
+### 10.3 What still stops a commit
+
+Deferred verification is not a licence to commit code you know is broken. If you *notice* a defect —
+a type error you can see, a component that cannot render, an import that does not resolve — fix it before
+committing. The deferral covers checks you did not run, not defects you already found.
+
+If you happen to have a working toolchain and running `npm run typecheck` is free, run it. The rule is
+"don't block on it", not "don't do it".
 
 <!-- BEGIN:nextjs-agent-rules -->
 

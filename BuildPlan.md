@@ -62,22 +62,31 @@ LOOP:
   2. Read docs/LANE.md → am I Lane A or Lane B?   (set at session start, §0)
      Read docs/progress-<lane>.md → what have I finished?
   3. Find the FIRST step in my lane with status TODO whose GATE (§4) is satisfied.
-       · No eligible step because a gate is unmet?
+       · A LATER step's gate is open but an EARLIER one's is not?
+           → take the later step NOW. Steps may be done out of order; only the gates bind.
+             Mark the skipped one BLOCKED(<gate>) so the ledger explains the hole.
+       · No eligible step at all because every remaining gate is unmet?
            → sleep 60s, git pull --rebase origin main, re-check. Repeat.
              (The other lane is mid-step; the gate WILL open. Never work their step to unblock yourself.)
        · No eligible step because my lane is finished?
-           → go to §7 Completion.
+           → go to §7 Verification phase.
   4. Mark it IN_PROGRESS in docs/progress-<lane>.md.
   5. Implement it. Touch ONLY files in my ownership list (§3).
-  6. Verify: the step's own acceptance checks, then the Definition of Done (CLAUDE.md §10).
-       · Verification fails? Fix it. Do not commit red. Do not mark DONE.
+  6. Confirm the step's own Build items are complete, and the cheap checks in CLAUDE.md §10.1.
+       · Toolchain verification (typecheck / lint / build / device sweep) is DEFERRED to §7.
+       · Record a NOT VERIFIED line in the ledger naming what you skipped and what is most likely wrong.
+       · A defect you actually noticed is still a defect. Fix it now; do not log it and move on.
   7. Update docs/progress-<lane>.md → DONE + notes. Update any doc section the step changed.
   8. git add -A
      git commit -m "<StepID>: <summary>"
      git pull --rebase origin main        ← the other lane has been pushing
-     git push origin main
+     git push origin main                 ← push immediately; an unpushed commit is a closed gate
   9. GOTO LOOP
 ```
+
+**Idling is a last resort, not a first response.** Before you sleep on a gate, check every remaining step in
+your own lane — `B3` and `B4` depend only on `A1`, and `A4` only on `B1`, so a lane is rarely as blocked as
+its step order suggests. Work anything eligible; idle only when nothing is.
 
 **Never** batch two steps into one commit. One step = one commit = one push. This keeps the other lane's
 rebases small and keeps the gate signals crisp.
@@ -157,10 +166,65 @@ your ledger.
 - **`src/components/LocationAutocomplete.tsx`** — the one file inside `src/components/**` that Lane A owns.
   It is used only by the shipper's create-auction form (A4); gating A4 on a Lane B step would serialise the
   lanes for nothing. **Lane B must not create or edit it.** See TechnicalDocument.md §10.3.
-- **`package.json`** — Lane A owns it. Lane B needs a dependency? Do **not** edit `package.json`. Record it
-  in `docs/progress-B.md` under `DEPS REQUESTED`; Lane A picks it up at its next step boundary. B0 needs no
-  new packages — Inter comes from `next/font`, Material Symbols is a webfont `<link>` already in
-  `layout.tsx`, and Tailwind v4 handles safe-area insets in CSS — so this should never trigger.
+- **`package.json`** — Lane A owns it, but **a dependency must never block Lane B.** Waiting for "Lane A's
+  next step boundary" is a hard serialisation point between two agents that are supposed to run in
+  parallel, and it can idle a lane for an entire step.
+
+  So: **either lane may add a dependency**, under three conditions.
+  1. It is a **deps-only commit** — `package.json` + `package-lock.json` and nothing else, message
+     `deps: <package> for <StepID>`. Never bundle a dependency into a feature commit.
+  2. It is **pushed immediately**, before the code that uses it.
+  3. It is recorded in your ledger under `DEPS ADDED`, so the other lane knows to re-run `npm install`
+     after their next pull.
+
+  Additions only — **removing or upgrading** someone else's dependency stays Lane A's call, via
+  `DEPS REQUESTED`. Adding a key to a JSON object is about the most conflict-proof edit there is; the
+  serialisation was never worth its cost.
+
+  **`package-lock.json` conflicts do not get hand-merged.** Take either side wholesale
+  (`git checkout --theirs package-lock.json`), re-run `npm install` to regenerate it, and commit the
+  result. Resolving a lockfile line by line produces a tree that installs nothing correctly.
+
+- **`src/app/favicon.ico` and Next's root app-icon conventions** (`icon.*`, `apple-icon.*`,
+  `opengraph-image.*` directly under `src/app/`) — **owned by Lane B**, the second carve-out inside the
+  other lane's tree. They are brand assets, they come from the same source as `public/icons/*`, and
+  `src/app/favicon.ico` is the only path Next 16 actually serves a favicon from — so B0 has to be able to
+  replace the scaffold default without a handoff. Lane A creates none of them and edits none of them.
+
+- **`src/app/(dashboard)/layout.tsx` does not exist, and deliberately so.** A shared dashboard layout would
+  put the top bar and bottom nav — Lane B's components — into the render path of Lane A's shipper pages,
+  making every chrome change a cross-lane negotiation. Instead **each page composes its own chrome** from
+  the three exports of `src/components/app-shell.tsx`:
+
+  ```tsx
+  <>
+    <TopAppBar leading={…} title="TruckingGO" trailing={…} />
+    <AppScreen>{/* page content */}</AppScreen>
+    <MobileNav role="SHIPPER" active="home" />
+  </>
+  ```
+
+  `AppScreen` takes `hasAppBar` / `hasNav` (both default `true`) for screens that drop one — a create form
+  ending in a sticky footer button passes `hasNav={false}`. If the file is ever created, it is Lane B's.
+
+- **Document metadata** — `src/app/layout.tsx` is Lane A's, but its `metadata` / `viewport` exports are
+  driven by Lane B's `src/lib/design/metadata.ts` (icons, OG/Twitter cards, `themeColor` from the design
+  tokens, `formatDetection`). Lane A wires it once and then never touches meta again:
+
+  ```ts
+  export { siteMetadata as metadata, siteViewport as viewport } from "@/lib/design/metadata";
+  ```
+
+- **One Neon database, shared by both lanes — `npm run db:seed` TRUNCATES all three tables.** This is the
+  last piece of genuinely shared mutable state, and the two checkouts do not protect you from it.
+  - **Lane A owns seeding.** `prisma/**` is Lane A's; only Lane A runs `db:seed`, and only when its own
+    step needs it.
+  - **Lane B never seeds.** If Lane B needs data that isn't there, it asks in `HANDOFF TO A` and works on
+    another step meanwhile.
+  - **Rows vanishing mid-step is not a bug.** It is the other lane reseeding. Re-seed (Lane A) or re-check
+    (Lane B) before reporting anything.
+  - The real fix, if seeding starts to hurt: give each checkout its own **Neon branch** and point that
+    checkout's `.env.local` `DATABASE_URL` at it. The schema is identical; only the rows diverge.
 
 ---
 
@@ -179,7 +243,7 @@ A gate is "does this file exist after `git pull`". Nothing else. No time-based c
 | `A6` | A5 done | |
 | `A7` | A6 done | |
 | `B0` | `package.json` exists | A0 pushed |
-| `B1` | `@theme` block present in `src/app/globals.css` | B0 done (own lane) |
+| `B1` | `@theme` block present in `src/app/globals.css` | B0 done (own lane) — **not** `tailwind.config.ts`, which Tailwind v4 does not have |
 | `B2` | B1 done | |
 | `B3` | `src/lib/session.ts` **and** `prisma/schema.prisma` exist | A1 pushed |
 | `B4` | `src/lib/schemas.ts` exists | A1 pushed |
@@ -636,19 +700,48 @@ passes · PWA installs and runs standalone.
 
 ---
 
-## 7. Completion
+## 7. Verification phase
 
-When every step in your lane is `DONE`:
+Per-step toolchain verification is **deferred** during the build (CLAUDE.md §10). It is not cancelled — it
+is collected here and run **once, against `main`, after both lanes are code-complete**. Nothing in this
+section runs while either lane still has a `TODO` step.
 
-1. `git pull --rebase origin main` and run the full Definition of Done against `main` as it now stands.
-2. Run the end-to-end scenario in TechnicalDocument.md §8.3 top to bottom.
-3. Write a closing entry in your ledger: what shipped, what's deferred, any `HANDOFF` items still open.
-4. If the other lane still has open steps, **stop and idle** — pull every 5 minutes and re-run §8.2's
-   mobile checklist against their newly landed screens, reporting (not fixing) anything broken via your
-   ledger. Do not start their work.
-5. When both lanes are `DONE`, the last one to finish appends a `## v1 complete` section to
-   `docs/progress-<lane>.md` listing the deferred backlog (Nearby/geo filtering, notifications, service
-   worker, dark-mode verification, ratings).
+### 7.1 When your lane finishes first
+
+1. `git pull --rebase origin main`, write a closing entry in your ledger: what shipped, what's deferred,
+   any `HANDOFF` items still open.
+2. **Assemble the verification worklist.** Read every `NOT VERIFIED` line in *your* ledger and collect them
+   into one `## VERIFICATION WORKLIST` section at the bottom. This is the whole payoff of the deferral —
+   the final pass must start from a list of named suspects, not from zero.
+3. Then **idle**: pull every 5 minutes until the other lane is `DONE`. Do not start their work, and do not
+   start §7.2 alone — half the app isn't there yet.
+
+### 7.2 The verification pass — run once, by whichever lane finishes last
+
+Work these in order; each one's failures are cheapest to fix before the next runs.
+
+| Step | What | Done when |
+|---|---|---|
+| `V1` | `npm install` on a clean tree, then `npm run typecheck` | zero errors |
+| `V2` | `npm run lint` | zero errors; no `any`, no unexplained `@ts-expect-error` |
+| `V3` | `npm run test` | green — timer formatter boundaries (TechnicalDocument.md §8.1) |
+| `V4` | `npm run build` | succeeds, and `npm run start` serves the production build |
+| `V5` | Device sweep at **390×844** — every route in §6.3, plus each screen's loading / empty / error state | no horizontal scroll, no rubber-band, every tap target ≥ 48px |
+| `V6` | Grep sweep: no `md:`/`lg:`, no raw hex, no PRD §6 palette, no `GOOGLE_MAPS_SERVER_API_KEY` in `src/app` or `src/components`, no server secret carrying `NEXT_PUBLIC_` | all empty |
+| `V7` | PWA: manifest parses, installs at 390×844, icons and `theme_color` correct | installable |
+| `V8` | End-to-end scenario, TechnicalDocument.md §8.3, top to bottom | passes on real data |
+| `V9` | Accessibility pass, TechnicalDocument.md §7.7 | contrast, `aria-label`s, no colour-only state |
+
+**Fixing what `V1`–`V9` find is exempt from the ownership rule** — by this point both lanes are code
+-complete, and a type error that spans both trees cannot be fixed from inside one of them. Fix it wherever
+it lives, in a commit prefixed `V<n>:`, and note it in your ledger. This is the *only* exemption in the
+build, and it does not open until every step in both lanes is `DONE`.
+
+### 7.3 Closing
+
+When `V1`–`V9` pass, append a `## v1 complete` section to your ledger listing the deferred backlog
+(Nearby/geo filtering, notifications, service worker, dark-mode verification, ratings) and anything from
+the worklist that was consciously accepted rather than fixed.
 
 ---
 
@@ -675,7 +768,10 @@ It is a **per-checkout** file — each of the two working copies holds its own v
 
 Status: TODO · IN_PROGRESS · DONE · BLOCKED(<gate>)
 
-## DEPS REQUESTED   (Lane B only — packages for Lane A to install)
+## NOT VERIFIED          (per step — the worklist §7 inherits; see CLAUDE.md §10.2)
+<StepID> — what was skipped; where it is most likely to be wrong
+## DEPS ADDED            (packages this lane installed — the other lane must re-run npm install)
+## DEPS REQUESTED        (removals/upgrades only — additions you make yourself, §3)
 ## HANDOFF TO <other lane>
 ## Blockers log
 <timestamp> — waiting on <gate>; re-checking in 60s
@@ -686,10 +782,14 @@ Status: TODO · IN_PROGRESS · DONE · BLOCKED(<gate>)
 ## 9. Rules that cannot be bent
 
 0. Ask which Claude you are at session start (§0). Never guess your lane.
-1. Never edit a file outside your ownership list (§3).
+1. Never edit a file outside your ownership list (§3) — until the §7.2 verification pass opens, which is
+   the single exemption and only once **both** lanes are `DONE`.
 2. Never work the other lane's step, even to unblock yourself.
-3. Never commit with a failing `build`, `typecheck`, or `lint`.
+3. Never commit a defect you have actually seen. Toolchain verification is deferred to §7 (CLAUDE.md §10);
+   noticing a bug and shipping it anyway is not deferral.
 4. Never force-push; never rewrite pushed history.
-5. One step, one commit, one push.
+5. One step, one commit, one push — and push the moment it's done. Gates are files on `main`; an unpushed
+   commit is a gate the other lane is still waiting on.
 6. After §0, never stop to ask the user. A gate that isn't open is a 60-second wait, not a question.
 7. Never add a `md:`/`lg:` breakpoint, a raw hex, or a desktop layout. This is a mobile app.
+8. Two checkouts, never one (§0). One Neon database — only Lane A seeds it (§3).

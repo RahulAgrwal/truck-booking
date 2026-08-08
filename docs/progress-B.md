@@ -67,24 +67,37 @@ Recorded in TechnicalDocument.md §6.1.
 `tailwind.config.ts` under `theme.extend` with a `darkMode: 'class'` key. Neither exists in Tailwind v4;
 §6.1 now describes the `@theme` block and the `@custom-variant dark` equivalent, matching §2.4.
 
-**⚠ Committed UNVERIFIED, by explicit user instruction.** None of the Definition of Done gates were run for
-`B0`: no `npm run typecheck`, no `npm run lint`, no `npm run build`, and no 390×844 or PWA-install pass.
-`node_modules` was being deleted and reinstalled by the other lane throughout this step, so the toolchain
-was not runnable at commit time regardless. The one accept criterion that *was* checked is the banned-hex
-grep over `src/`, which passes.
+`npm run db:seed` was **not** run; per BuildPlan §3 seeding is Lane A's alone, and `B0` touches no data.
 
-**Lane A: re-run the gates before trusting this.** The likeliest failure points, in order: (1) the
-`@theme inline` font block — if `font-headline-md` renders as a fallback sans rather than Inter, that is
-the culprit; (2) the `pt-safe` / `pb-safe` `@utility` names colliding with Tailwind's dynamic `pt-*`
-resolution; (3) `AppScreen`'s nested-`calc(env(…))` arbitrary values. All three are contained in two files.
+## NOT VERIFIED
+_Per step: what was skipped, and where it is most likely wrong. This is the worklist BuildPlan §7.2
+inherits — see CLAUDE.md §10.2._
 
-`npm run db:seed` was **not** run (user instruction); `B0` touches no data.
+**B0** — no `typecheck` / `lint` / `build` / `test`; no 390×844 pass; no PWA-install check. (`node_modules`
+was being deleted and reinstalled by the other lane throughout the step, so the toolchain was not runnable
+at commit time; verification is deferred by user direction regardless.) The banned-PRD-hex grep over `src/`
+**was** run and passes.
+
+Most likely to be wrong, in order:
+1. **The `@theme inline` font block.** If `font-headline-md` renders as a system sans instead of Inter,
+   this is the cause — `--font-inter` is defined on `<body>` by `next/font`, and the `inline` keyword is
+   what makes the reference resolve on the element rather than dying at `:root`.
+2. **`pt-safe` / `pb-safe`.** Custom `@utility` names that sit in the same namespace Tailwind's dynamic
+   `pt-*` resolves from. If safe-area padding is simply absent, they lost.
+3. **`AppScreen`'s nested `calc(env(…))` arbitrary values.** If content hides under the app bar or the
+   bottom nav, Tailwind did not emit the class.
+4. **`src/app/favicon.ico` vs `metadata.icons`.** Next's file convention may take precedence over the
+   config-based icon list; the manifest is unaffected either way, so this is cosmetic.
+
+## DEPS ADDED
+_Packages this lane installed. The other lane must re-run `npm install` after pulling._
+
+**None.** B0 added no dependencies and B1 will not either.
 
 ## DEPS REQUESTED
-_Packages Lane A must add to `package.json` — Lane B never edits it. Lane A picks these up at its next step
-boundary._
+_Removals and upgrades only — additions each lane makes itself (BuildPlan §3)._
 
-**Empty.** B0 added no dependencies and B1 will not either.
+**Empty.**
 
 ## HANDOFF TO A
 _Defects found in Lane A files, and requests. Report, do not fix._
@@ -120,20 +133,25 @@ _Defects found in Lane A files, and requests. Report, do not fix._
    anything number-shaped, which on a screen of ₹ amounts, kg weights and countdown digits turns arbitrary
    numbers into blue tappable links.
 
-3. **`src/app/favicon.ico` was replaced** — heads-up, it sits in your tree. It was still the Next.js
-   scaffold default (the Vercel triangle). It is now the TruckingGO mark at 16/32/48. No lane's ownership
-   list names this file, and it is the only path Next 16 actually serves a favicon from; a copy also lives
-   at `public/icons/favicon.ico`. Revert it if you disagree.
+3. **`src/app/favicon.ico` was replaced** — it was still the Next.js scaffold default (the Vercel
+   triangle); it is now the TruckingGO mark at 16/32/48, with a copy at `public/icons/favicon.ico`.
+   It sits in your tree but no lane owned it, and it is the only path Next 16 actually serves a favicon
+   from. **BuildPlan §3 now assigns it (and `icon.*` / `apple-icon.* `/ `opengraph-image.*` under
+   `src/app/`) to Lane B** as a carve-out, alongside `LocationAutocomplete.tsx` going the other way.
 
 4. **Optional: `NEXT_PUBLIC_SITE_URL` in `.env.example`.** `metadata.ts` uses it as `metadataBase` so OG
    image URLs resolve absolutely, and falls back to `http://localhost:3000` when unset — so nothing breaks
    without it, but social cards will point at localhost in production until it is set to the Cloud Run URL.
    It is a public, non-secret value; safe as a plain build/runtime env var.
 
-5. **We share one working directory.** `node_modules` was deleted and reinstalled underneath this step
-   mid-verification. Not a complaint — just flagging that `npm install` / `npm run build` here is not
-   isolated between us, so a failing command may be the other lane's install rather than a real break.
-   Re-run before believing it.
+5. **Shared working directory — resolved by your `02cda46`, thank you.** For the record of what it cost:
+   `node_modules` was deleted and reinstalled underneath `B0`, and `package-lock.json` is still showing as
+   deleted in the tree here. Once Lane B moves to its own checkout this stops mattering; until then, a
+   failing command may be your install rather than a real break.
+
+6. **Dependencies no longer route through you.** BuildPlan §3 now lets either lane add a package directly,
+   in a deps-only commit pushed immediately, recorded under `DEPS ADDED`. `DEPS REQUESTED` is now only for
+   removals and upgrades. Re-run `npm install` after pulling a commit prefixed `deps:`.
 
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
