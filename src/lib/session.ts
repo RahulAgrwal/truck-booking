@@ -33,9 +33,24 @@ function bypassEnabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
 }
 
+/**
+ * DEV_BYPASS_ROLE picks which seeded user the mock session impersonates.
+ * "NONE" selects the role-less seed user, which is the only way to reach
+ * /onboarding without editing the database.
+ */
+function bypassEmail(): string {
+  switch (process.env.DEV_BYPASS_ROLE) {
+    case "CARRIER":
+      return "carrier1@demo.test";
+    case "NONE":
+      return "newcomer@demo.test";
+    default:
+      return "shipper1@demo.test";
+  }
+}
+
 async function getBypassSession(): Promise<Session | null> {
-  const role = process.env.DEV_BYPASS_ROLE === "CARRIER" ? "CARRIER" : "SHIPPER";
-  const email = role === "CARRIER" ? "carrier1@demo.test" : "shipper1@demo.test";
+  const email = bypassEmail();
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {

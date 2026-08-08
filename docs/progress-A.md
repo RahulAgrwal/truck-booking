@@ -7,7 +7,7 @@ Status values: `TODO` · `IN_PROGRESS` · `DONE` · `BLOCKED(<gate>)`
 |------|-------|------|--------|--------|-------|
 | A0 | Scaffold, database, container, Cloud Build | — | **DONE** | | Lane B's B0 gate is OPEN |
 | A1 | Firebase auth + session | — | **DONE** | | `src/lib/schemas.ts` exists → B4's gate is OPEN |
-| A2 | Onboarding & role routing | — | TODO | | |
+| A2 | Onboarding & role routing | — | **DONE** | | next: A3, **blocked on Lane B's B2** |
 | A3 | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | TODO | | |
 | A4 | Create auction | `ui/button.tsx` | TODO | | |
 | A5 | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | TODO | | |
@@ -49,6 +49,22 @@ Each is documented in TechnicalDocument.md; Lane B must read §2.2–§2.4 befor
 - Verified: bypass=SHIPPER → `/` routes to `/shipper`; bypass=CARRIER → `/carrier`; bypass off → `/`,
   `/shipper`, `/carrier`, `/onboarding` all redirect to `/login`; `/login` renders 200; `/api/cron` is
   never redirected.
+
+## A2 notes
+- Added a third bypass mode, `DEV_BYPASS_ROLE="NONE"`, which impersonates the role-less seed user. It is
+  the only way to reach `/onboarding` without hand-editing the database — worth having for anyone
+  re-verifying this screen later.
+- **Deliberate copy change.** Stitch says "You can change this later in settings." That is false:
+  `setUserRole` rejects a second write, because switching roles would orphan a shipper's auctions or a
+  carrier's bids. The screen now reads "This decides which app you see. It can't be changed later."
+  Promising a setting we will not build is worse than a blunt sentence up front.
+- Visual verification at 390×844 deferred to B0, same as `/login`.
+
+## Lane A is now blocked
+`A3` needs `src/components/auction-card.tsx` + `mobile-nav.tsx` (Lane B's **B2**).
+`A4` needs `src/components/ui/button.tsx` + `input.tsx` (Lane B's **B1**).
+Per BuildPlan §1 the loop pulls every 60s and waits — it does not work Lane B's steps.
+**All four Lane B gates are open**, so B0→B6 can run start to finish without Lane A.
 
 ## Google Maps — status
 Schema + migration + seed data: **done in A0**. `LocationAutocomplete.tsx`, `src/lib/maps.ts` and
