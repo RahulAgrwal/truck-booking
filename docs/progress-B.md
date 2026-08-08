@@ -18,7 +18,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
 | B4 | `[x]` | Place a bid | `schemas.ts` | | Stitch `69e048b5…` + `16fc1711…` · all six §5.3 guards |
 | B5 | `[x]` | My Bids | B4 | | hand-built · Mobbin-referenced · **B6 gate is OPEN** |
-| B6 | `[~]` | Profile, state coverage, a11y pass | B5 | | hand-built · audits BOTH lanes' screens |
+| B6 | `[x]` | Profile, state coverage, a11y pass | B5 | | **Lane B complete** · audit findings below |
 
 ## B0 notes
 
@@ -265,6 +265,67 @@ de-duplication, and in a reverse auction a carrier's own successive bids are rea
 `error.tsx` is beyond `B5`'s file list (which names only `page` and `loading`), but §7.5 requires an error
 state on every list screen, and without one a failure falls through to the root boundary and loses the nav.
 
+## B6 notes — profile, state coverage, a11y
+
+`/profile` + `loading` + `error` + `sign-out-button`, the offline banner, three app-wide boundaries, and
+the audit. **This completes Lane B (B0–B6).**
+
+**Profile is deliberately thin.** There is nothing to configure: the role is immutable once chosen
+(`setUserRole` refuses a second write), so a "change role" control would be a dead end, and inventing
+preferences nothing reads would be worse than a short screen. It uses `requireSession`, not `requireRole`
+— it is the one `(dashboard)` screen either role reaches — and redirects a role-less user to `/onboarding`.
+Sign-out confirms in a bottom `Sheet`: not destructive, but one tap from the nav, and an accidental
+sign-out costs a whole Google round trip.
+
+`profile/loading.tsx` and `profile/error.tsx` render **without** `MobileNav`, unlike the other screens'.
+The nav needs a role, and the role is precisely what those states are still waiting on — drawing one would
+light the wrong three tabs.
+
+### State coverage — the real gap was app-wide, not per-screen
+
+Every route now has a boundary, and nothing falls through to Next's default error page (the raw stack
+§7.5 forbids). Before this step there were **no root boundaries at all**:
+
+| Added | Catches |
+|---|---|
+| `src/app/error.tsx` | `/`, `/login`, `/onboarding`, `/shipper/*` — every route without its own |
+| `src/app/not-found.tsx` | bad URLs, and `notFound()` from a detail page whose id no longer resolves |
+| `src/app/global-error.tsx` | a failure in the **root layout itself**, which `error.tsx` cannot catch |
+
+`global-error.tsx` uses **inline styles and hard-coded colours**, which is correct exactly once: it
+replaces the whole document, so if the failure was `globals.css` never loading, every token class would
+render as nothing and the user would get invisible text. Recorded in TechnicalDocument.md §7.7 alongside
+the other sanctioned exception.
+
+The **offline banner** is mounted in `AppShell`, so it covers both lanes without either remembering it.
+It starts optimistic and corrects in an effect — `navigator` does not exist during SSR, and a banner that
+flashes on every cold load is worse than one a tick late. It matters *because* there is no service worker
+(§7.2): nothing degrades gracefully on the user's behalf, so the app has to say so.
+
+### Accessibility audit
+
+- **No colour-alone** is enforced by a test, not by review: `resolveBidStatus` has one asserting the four
+  bid situations are distinguishable **by text**. Every `Badge` takes its word as children rather than
+  deriving it from `tone`.
+- **Icon-only controls** all carry an `aria-label` — audited across both lanes, 22 in total. The `Icon`
+  primitive makes the right thing the default: `aria-hidden` unless given a `label`, so an icon inside an
+  already-labelled control is silent, and an icon-only button must name itself.
+- **`prefers-reduced-motion`** is handled once in `globals.css` and therefore already covers everything
+  added since: `animate-ping`, `animate-pulse`, `animate-sheet-up`, the success tick's stroke draw, and
+  every `active:scale-*`.
+- **Contrast** rides on the `on-*` pairings. Tightest currently shipping is `text-secondary` on
+  `surface-container-low`; worth a contrast-checker reading during `V9`.
+
+### Accept-criteria greps — all clear
+
+`grep -rnE '\b(sm|md|lg|xl|2xl):'` · PRD palette · `GOOGLE_MAPS_SERVER_API_KEY` in `src/app`/`src/components`
+— all empty across the whole tree, both lanes.
+
+Two hex findings that are **not** violations, both now documented in TechnicalDocument.md §7.7:
+the Google `G` mark in `(auth)/login/google-button.tsx` (Google's branding terms require those exact four
+colours — tokenising them would be a licensing problem, not an improvement), and `global-error.tsx` above.
+`src/generated/prisma/**` also matches the `any` grep; it is gitignored generated code.
+
 ## B0 fix — favicon.ico RGBA (`ecf29fb` handoff from Lane A)
 
 Lane A's Cloud Build died in `next build` on `src/app/favicon.ico`:
@@ -292,7 +353,7 @@ Worth recording as a process point: B0's local pass missed this because the ICO 
 _Verification is deferred to BuildPlan §7 (CLAUDE.md §10). Where the toolchain happened to be usable,
 §10.3 says to run it — so some of this is now green rather than unknown._
 
-**Ran clean over B0 – B5** once the other lane's `npm install` finished:
+**Ran clean over B0 – B6** (all of Lane B):
 
 - `npm run typecheck` — **passes** (found and fixed one real defect: `NAV_ITEMS[role][0]` is
   `NavItem | undefined` under `noUncheckedIndexedAccess`)
@@ -376,6 +437,19 @@ built against these tokens) and see whether it is styled at all.
 22. **`animate-[draw-mark_…]`** on the success tick — an arbitrary animation name plus a `@keyframes` in
     `@theme`. If the tick appears fully drawn with no animation, that pairing is why. Cosmetic.
 
+**B6 — the audit itself is done; what it could not check needs a browser:**
+
+26. **The offline banner.** DevTools → Network → Offline. Should appear within a tick, sit above the app
+    bar, and clear on reconnect. The optimistic-start decision means it can never flash on a normal load —
+    confirm that too.
+27. **`global-error.tsx` actually rendering.** The hardest state to reach deliberately: throw from the root
+    layout. Worth doing once, because if it is broken you only find out during a real outage.
+28. **`not-found.tsx`** via a junk URL and via a deleted auction id (`notFound()` from the detail page).
+29. **Sign-out.** The `Sheet` confirm, then `signOut` revoking tokens and landing on `/login` — and that
+    the back button does not restore a signed-in screen from bfcache.
+30. **Reduced motion end-to-end.** OS setting on, then check `animate-ping`, the skeleton pulse, the sheet
+    slide and the success tick are all still.
+
 **B5 — the status logic is tested, so what is left is the data:**
 
 23. **All four situations visible at once.** The seed gives auction 4 two PENDING bids on a
@@ -398,7 +472,30 @@ _Removals and upgrades only — additions each lane makes itself (BuildPlan §3)
 ## HANDOFF TO A
 _Defects found in Lane A files, and requests. Report, do not fix._
 
-### ⚠ Lane B edited `cloudbuild.yaml` — the migrate step (user instruction)
+### B6 audit — state gaps in Lane A screens (report, not fix)
+
+Audited every route on `main`. Lane B's four are complete. Yours, as they stand:
+
+| Route | loading | error | Note |
+|---|---|---|---|
+| `/` | — | now covered | Pure redirect; root `error.tsx` catches a `getSession` failure |
+| `/login` | — | now covered | Not a list, so §7.5's four states don't strictly apply |
+| `/onboarding` | — | now covered | Same |
+| `/shipper/create` | **missing** | now covered | Does async work before first paint — a `loading.tsx` would help |
+| `/shipper` (A3) | not built | — | When it lands: it **is** a list, so all four states apply |
+| `/shipper/auction/[id]` (A5) | not built | — | List of bids — same |
+| `/shipper/history` (A7) | not built | — | Same, plus a terminal-status empty state |
+
+**I added `src/app/error.tsx`, `not-found.tsx` and `global-error.tsx`** — app-wide, unowned by either
+lane's list, and squarely B6's "state coverage" mandate. They now catch failures on your screens too, which
+is why the middle column reads "now covered". If you would rather own them, take them; just don't add a
+second set, and note that a route-level `error.tsx` you add will correctly win over the root one.
+
+For A3/A5/A7 the checklist is: `loading.tsx` with `Skeleton` matching the real card geometry, `error.tsx`
+with `reset()`, and an `EmptyState` with a CTA. `SkeletonList`, `EmptyState` and `ErrorState` are all in
+`src/components/ui/` and take exactly those props.
+
+### ⚠ Lane B edited `cloudbuild.yaml` and `prisma.config.ts` (user instruction)
 
 `cloudbuild.yaml` is yours. The user hit the failure, gave it to Lane B, and then said "take ownership and
 fix on your end", so this one is mine. **Do not re-fix it** — that is what happened with the favicon, and
@@ -421,11 +518,29 @@ Also changed `npx prisma` → `npx --yes prisma`. The standalone output only tra
 imports, so the **Prisma CLI is not in the runtime image** even though `@prisma/client` is — `npx` will
 therefore fetch it, and without `--yes` it stops at a confirmation prompt that has no TTY to answer it.
 
-**Not verified end-to-end** — there is no Docker on this machine, so this could not be reproduced locally.
-The EACCES cause is unambiguous and the fix is the standard one. If the next run fails *differently* — most
-likely "prisma not found" or an engine-download problem — the fallback is to stop using the runner image
-for migrations and run them from a plain `node:22-alpine` step against `/workspace`, which has the schema,
-`prisma.config.ts` and the migrations.
+**Then it failed again, further along** (`4d309c7`). With npm working, Prisma got as far as loading the
+config and died on `Cannot find module 'dotenv'`. Cloud Build runs every step with `cwd=/workspace` — the
+repo source, **no `node_modules`** — so both of `prisma.config.ts`'s imports were unresolvable there:
+
+- `dotenv` (a devDependency) is now loaded lazily in a `try`/`catch`. The file's own comment already said
+  "in Cloud Build the vars are already in the environment, so this is a no-op there" — the import just had
+  to stop being mandatory for that to be true.
+- `defineConfig` → **`satisfies PrismaConfig` with a type-only import**. Same type checking, erased at
+  compile time, so `prisma/config` never resolves at runtime. This was the *next* failure in line and
+  would have cost another deploy to find.
+
+**Reproduced locally this time**: `prisma.config.ts` + `prisma/` copied into an empty directory with no
+`node_modules`, then `npx --yes prisma@7.9.1 validate`. Before: `Cannot find module 'prisma/config'`.
+After: config loads, schema valid. `npx prisma validate` in the repo still loads `.env.local` unchanged.
+
+**Keep both imports non-runtime.** Tidying that type-only import back into a value import breaks the deploy
+in exactly the same way.
+
+**Still unverified**: whether `npx --yes prisma` resolves the CLI itself inside that step — the config is
+now proven, the CLI fetch is not, and there is no Docker here to test it. If it fails again, the fallback
+is to stop using the runner image for migrations: run them from a plain `node:22-alpine` step that does
+`npm ci --ignore-scripts --omit=dev` against `/workspace` first (note `prisma` is a *dependency*, not a
+devDependency, so it lands in the tree), which makes `prisma` a local binary instead of an npx fetch.
 
 0. **`A4`'s gate is OPEN** — `src/components/ui/button.tsx` exists as of `B1`. The create-auction form can
    start now; it does not need to wait for `B2`. Available to it: `Button` / `ButtonLink`
@@ -487,4 +602,27 @@ for migrations and run them from a plain `node:22-alpine` step against `/workspa
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
 
-- `B0` — none. Gate (`package.json`) was already satisfied.
+- Lane B never idled. Every gate was open when its step came up: `B0` needed only `A0`, `B1`/`B2` were
+  own-lane, and `B3`/`B4` were unblocked by `A1` long before they were reached.
+
+## VERIFICATION WORKLIST — Lane B complete (B0–B6)
+
+Per BuildPlan §7.1, this is the worklist §7.2 inherits from this lane. **Lane A still has `A3`, `A5`, `A6`
+and `A7` open, so §7.2 must not start yet.**
+
+What is already green across B0–B6: `typecheck`, `lint`, `test` (54, 5 files), and the three
+accept-criteria greps. `npm run build` last passed on `main` at the favicon fix; it has not been re-run
+since B3–B6 landed.
+
+What remains is **30 numbered items under `NOT VERIFIED`**, none of which a static check can reach. Ranked
+by what would hurt most if wrong:
+
+1. **#17 — guard 4 with the UI forced open.** Bid on a load whose deadline has passed without letting the
+   page refresh. If this fails, the auction can be won after it closed. Everything else on this list is UX.
+2. **#12 / #25 — URL-held filter and tab state surviving a 7s poll.** The single design decision the
+   carrier screens rest on.
+3. **#23 — a PENDING bid on an expired auction reading "Auction expired", not "Pending".** Tested in
+   isolation; unproven against real seed rows.
+4. **#1–#3 — whether the tokens emit at all.** Cheapest possible check: load `/login` and see if it is
+   styled.
+5. Everything else is cosmetic or single-screen.

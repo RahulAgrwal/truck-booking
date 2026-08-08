@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { OfflineBanner } from "./offline-banner";
+
 /**
  * The viewport-locked mobile shell (TechnicalDocument.md §7.1).
  *
@@ -42,6 +44,11 @@ import type { ReactNode } from "react";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative flex min-h-dvh w-full flex-col overflow-x-hidden bg-background">
+      {/*
+        Mounted here so it covers every route in both lanes (§7.5). It renders
+        nothing while online, so the cost is one small client island.
+      */}
+      <OfflineBanner />
       {children}
     </div>
   );

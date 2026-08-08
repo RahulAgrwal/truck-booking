@@ -618,6 +618,32 @@ Every list screen ships all four:
 | Error | `error.tsx` — plain message + "Try again" (`reset()`); never a raw stack |
 | Offline | `navigator.onLine === false` → sticky `error-container` banner above `main` |
 
+**As built (`B6`).** Three refinements the table above does not capture:
+
+1. **Empty is not one state.** A feed that is empty *because of a filter* needs different copy and a way
+   out — "No loads match those filters" plus a route back to the unfiltered list. Reusing "No loads
+   available right now" there tells the user the market is dead when it is not. `/carrier` ships both.
+2. **Four app-wide boundaries**, so nothing can fall through to Next's default error page (which is the raw
+   stack this section forbids):
+
+   | File | Catches |
+   |---|---|
+   | `<route>/error.tsx` | that route — the four Lane B screens have their own |
+   | `src/app/error.tsx` | everything else: `/`, `/login`, `/onboarding`, `/shipper/*` |
+   | `src/app/not-found.tsx` | bad URLs, and `notFound()` from a detail page whose id no longer resolves |
+   | `src/app/global-error.tsx` | a failure in the **root layout itself**, which `error.tsx` cannot catch |
+
+   `global-error.tsx` replaces the whole document, so it supplies its own `<html>`/`<body>` and uses
+   **inline styles, not token classes** — if the failure was `globals.css` never loading, every
+   `bg-surface` on that screen would render as nothing. It is the one file in the app where hard-coded
+   colour values are correct.
+3. **The offline banner is mounted in `AppShell`**, so it covers both lanes' routes without either lane
+   remembering to add it. It starts optimistic (`online: true`) and corrects in an effect: `navigator` does
+   not exist during SSR, so seeding from it would either break the render or hydrate to a mismatch, and a
+   banner that flashes on every cold load is worse than one that appears a tick late. This banner is
+   load-bearing precisely *because* there is no service worker (§7.2) — nothing degrades gracefully on the
+   user's behalf, so the app has to say so.
+
 ### 7.6 Interaction rules
 
 Tap targets ≥ 48px with ≥ 8px between them. Press feedback on everything tappable. Destructive/irreversible
@@ -640,6 +666,31 @@ holds). Never signal state by color alone: the LIVE badge pairs red with the wor
 green with "Won". Every icon-only button gets an `aria-label`. Timers are `aria-live="off"` (a per-second
 announcement is hostile) with an `aria-label` carrying the full remaining time. Respect
 `prefers-reduced-motion` — that includes the LIVE badge's `animate-ping`.
+
+**As built (`B6`).** How each rule is actually enforced, so a future change can tell whether it broke one:
+
+- **No colour-alone** is not left to review — `resolveBidStatus` is a pure function with a test asserting
+  the four bid situations are distinguishable **by text**, and every `Badge` takes its word as children
+  rather than deriving it from `tone`. The four situations are "Pending", "Won", "Lost", and
+  "Auction expired" (a `PENDING` bid whose auction elapsed — §5.5).
+- **`aria-label` on icon-only controls** is enforced by the `Icon` primitive's shape: it is
+  `aria-hidden` by default and only becomes `role="img"` when given a `label`. An icon inside a labelled
+  control is therefore silent by default, which is the correct behaviour, and an icon-only button has to
+  supply the name on the button itself. Audited: every such control has one.
+- **`prefers-reduced-motion`** is handled once, in `globals.css`, collapsing all animation and transition
+  durations. That covers `animate-ping` (LIVE badge), `animate-pulse` (skeletons), `animate-sheet-up`
+  (bottom sheet), the success tick's stroke draw, and every `active:scale-*` press. Component-level
+  motion never needs its own guard.
+- **Contrast** rides on keeping the `on-*` pairings intact. The one place to watch is a token used as
+  text on a surface it was not paired with — `text-secondary` (#565e74) on `surface-container-low` is the
+  tightest pairing currently shipping.
+- **Timers** are `aria-live="off"` with a descriptive `aria-label`, and the visible digits use
+  `suppressHydrationWarning` because the server and client clocks differ by the network round trip.
+
+**The one sanctioned raw-hex exception in `src/`** (besides `globals.css` and `tokens.ts`, which define the
+tokens, and `global-error.tsx`, which cannot depend on them): the Google `G` mark in
+`(auth)/login/google-button.tsx`. Google's branding terms require those four exact brand colours, so
+tokenising them would be a licensing problem, not a design improvement. Any *other* hex in `src/` is a bug.
 
 ---
 
