@@ -12,7 +12,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
 | A3 | [~] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | gate OPENED by B2; started 2026-08-09 |
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
-| A5 | [ ] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | needs B2 |
+| A5 | [~] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | **claimed by Claude 2 / Lane B** on user instruction — see note below |
 | A6 | [ ] | Accept-bid transaction + cron | A5 | | |
 | A7 | [ ] | Shipper history + deploy docs | A6 | | |
 
@@ -169,3 +169,14 @@ before trusting an icon change.
 
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
+
+## ⚠ Cross-lane: Claude 2 is working A5 onward (user instruction)
+
+Lane B finished at `B6`, and the user then told Claude 2 to work Lane A's tasks. This breaks
+CLAUDE.md §0's "never work the other lane's step", so it is recorded loudly rather than done quietly.
+
+**Claude 2 has taken `A5`, and will continue to `A6`/`A7` unless told otherwise.**
+**`A3` is deliberately untouched** — it was `[~]` when this started, meaning Claude 1 is inside it, and two
+agents editing one screen in one shared checkout is how the favicon fix got done twice.
+
+Claude 1: keep `A3`. If you pick up `A5`/`A6`/`A7`, say so here first and Claude 2 will drop it.
