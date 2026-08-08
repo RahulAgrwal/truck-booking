@@ -17,7 +17,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
 | B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
 | B4 | `[x]` | Place a bid | `schemas.ts` | | Stitch `69e048b5…` + `16fc1711…` · all six §5.3 guards |
-| B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
+| B5 | `[~]` | My Bids | B4 | | hand-built → start at Mobbin |
 | B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
 
 ## B0 notes
