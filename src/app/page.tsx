@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 
+import { getSession, homePathFor } from "@/lib/session";
+
 /**
- * Landing route. A1 replaces the unconditional redirect with session-aware
- * routing: no session → /login, role null → /onboarding, otherwise the
- * role's home (TechnicalDocument.md §4.1).
+ * Landing route. Everything here is a redirect: signed out → /login, signed in
+ * without a role → /onboarding, otherwise the role's home.
  */
-export default function Home() {
-  redirect("/login");
+export default async function Home() {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  redirect(homePathFor(session.role));
 }

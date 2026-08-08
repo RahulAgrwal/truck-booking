@@ -299,7 +299,7 @@ requireRole(r):   Promise<Session>          // redirect('/onboarding') if role n
 Cookie: name `__session`, `httpOnly`, `secure` in production, `sameSite: 'lax'`, `path: '/'`,
 `maxAge` 5 days. Sign-out clears the cookie **and** calls `revokeRefreshTokens`.
 
-### 4.3 Middleware — `middleware.ts`
+### 4.3 Middleware — `src/middleware.ts`
 
 Middleware performs a **cheap presence check only** — the Firebase Admin SDK does not run on the Edge
 runtime. Full cryptographic verification happens in `getSession()` inside Server Components/Actions.
@@ -313,6 +313,11 @@ runtime. Full cryptographic verification happens in `getSession()` inside Server
 | `/_next/*`, `/icons/*`, `/manifest.json`, `/favicon.ico` | public |
 
 Role separation (a CARRIER hitting `/shipper/*`) is enforced by `requireRole()` in the page, not middleware.
+
+> **The file must be `src/middleware.ts`, not `middleware.ts`.** With a `src/` directory Next resolves
+> middleware beside the `app` directory. At the repo root it is silently ignored — the build output still
+> prints `ƒ Proxy (Middleware)`, so this only surfaces when a protected route 404s instead of redirecting.
+> Caught in A1 by curling `/shipper` with the bypass off.
 
 ### 4.4 `DEV_AUTH_BYPASS`
 

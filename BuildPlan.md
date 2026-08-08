@@ -82,7 +82,7 @@ package.json  package-lock.json  tsconfig.json  next.config.ts  eslint.config.* 
 Dockerfile  .dockerignore  cloudbuild.yaml  .gcloudignore  .env.example
 vitest.config.mts  prisma.config.ts
 prisma/**                              (schema, migrations, seed)
-middleware.ts
+src/middleware.ts   (must live under src/ — Next resolves it beside the app dir)
 src/app/layout.tsx  src/app/page.tsx
 src/app/(auth)/**                      (login, onboarding)
 src/app/(dashboard)/shipper/**

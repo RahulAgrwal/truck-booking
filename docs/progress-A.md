@@ -6,7 +6,7 @@ Status values: `TODO` · `IN_PROGRESS` · `DONE` · `BLOCKED(<gate>)`
 | Step | Title | Gate | Status | Commit | Notes |
 |------|-------|------|--------|--------|-------|
 | A0 | Scaffold, database, container, Cloud Build | — | **DONE** | | Lane B's B0 gate is OPEN |
-| A1 | Firebase auth + session | — | TODO | | |
+| A1 | Firebase auth + session | — | **DONE** | | `src/lib/schemas.ts` exists → B4's gate is OPEN |
 | A2 | Onboarding & role routing | — | TODO | | |
 | A3 | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | TODO | | |
 | A4 | Create auction | `ui/button.tsx` | TODO | | |
@@ -35,6 +35,20 @@ Each is documented in TechnicalDocument.md; Lane B must read §2.2–§2.4 befor
 5. **Google Maps added mid-step** (user directive, decision D9). Six nullable route fields are already in
    the schema and migrated, and the seed carries real coordinates and distances, so Lane B can build
    against them immediately. Implementation lands in A4. *(§10)*
+
+## A1 notes
+- **Bug found by runtime verification: middleware must be `src/middleware.ts`.** At the repo root Next
+  silently ignores it while *still* printing `ƒ Proxy (Middleware)` in the build output. Only surfaced by
+  curling `/shipper` with the bypass off and getting a 404 instead of a redirect. Docs corrected.
+- `/login` renders and is correct structurally, but its **visual verification at 390×844 is deferred until
+  B0 lands** — the token classes it uses (`bg-primary-container`, `text-headline-lg`, `px-margin-mobile`)
+  don't exist until Lane B writes the `@theme` block. The markup needs no further change; the styles will
+  simply light up.
+- With no Firebase keys configured, the sign-in button renders an honest **"Google sign-in unavailable"**
+  disabled state rather than throwing on click.
+- Verified: bypass=SHIPPER → `/` routes to `/shipper`; bypass=CARRIER → `/carrier`; bypass off → `/`,
+  `/shipper`, `/carrier`, `/onboarding` all redirect to `/login`; `/login` renders 200; `/api/cron` is
+  never redirected.
 
 ## Google Maps — status
 Schema + migration + seed data: **done in A0**. `LocationAutocomplete.tsx`, `src/lib/maps.ts` and
