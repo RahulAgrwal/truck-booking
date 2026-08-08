@@ -6,8 +6,23 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { resolveRoute } from "@/lib/maps";
-import { CreateAuctionSchema, firstIssue, type ActionResult } from "@/lib/schemas";
+import { AcceptBidSchema, CreateAuctionSchema, firstIssue, type ActionResult } from "@/lib/schemas";
 import { tonsToKg } from "@/lib/format";
+
+/**
+ * Thrown inside `acceptBid`'s transaction when the status-guarded claim matches
+ * no rows — meaning cron expired the auction, or another accept won the race.
+ *
+ * A class rather than a string so the `catch` can tell "someone else got there
+ * first", which is ordinary, from a real database failure, which is not.
+ * Throwing is what rolls the transaction back.
+ */
+class AuctionNoLongerActiveError extends Error {
+  constructor() {
+    super("Auction is no longer ACTIVE");
+    this.name = "AuctionNoLongerActiveError";
+  }
+}
 
 /**
  * Create an auction, resolving the driving route first
@@ -84,18 +99,90 @@ export async function calculateRouteAndCreateAuction(
 }
 
 /**
- * Accept a bid — implemented in A6 (TechnicalDocument.md §5.4).
+ * Accept a bid — the critical transaction (TechnicalDocument.md §5.4).
  *
- * Deliberately not stubbed with a fake success: it must be a status-guarded
- * transaction, and a placeholder that "works" is worse than an absent one.
+ * The shipper accepting races the cron job expiring the same auction.
+ * Read-then-write loses that race: both readers see `ACTIVE`, both proceed, and
+ * the auction ends up assigned *and* expired, or a bid gets accepted on a load
+ * whose deadline passed.
  *
- * A5 widened the signature to the real one so the accept sheet could be built
- * against it. The body is still the honest refusal — the UI renders the button
- * and the confirm sheet, and pressing through shows this message until A6
- * lands.
+ * The fix is a **status-guarded conditional update**. `updateMany` with
+ * `status: 'ACTIVE'` in its `WHERE` is atomic — whoever flips the row first
+ * wins, and the loser sees `count === 0` and aborts. Nothing is decided by
+ * anything we read beforehand.
+ *
+ * Serializable isolation on top of that, because the three writes must be one
+ * indivisible fact: an auction assigned with no accepted bid, or two accepted
+ * bids, are both states the schema cannot express its way out of.
  */
-export async function acceptBid(_input: unknown): Promise<ActionResult> {
-  return { ok: false, error: "Accepting bids is not available yet." };
+export async function acceptBid(input: unknown): Promise<ActionResult> {
+  const session = await requireRole("SHIPPER");
+
+  const parsed = AcceptBidSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, ...firstIssue(parsed.error) };
+
+  const { auctionId, bidId } = parsed.data;
+
+  // Ownership is checked here, but it is NOT what makes the write safe — the
+  // transaction's WHERE clause is. This just fails early with a better message.
+  const bid = await prisma.bid.findUnique({
+    where: { id: bidId },
+    select: { id: true, auctionId: true, auction: { select: { shipperId: true } } },
+  });
+
+  if (!bid || bid.auctionId !== auctionId) {
+    return { ok: false, error: "That bid no longer exists." };
+  }
+  if (bid.auction.shipperId !== session.userId) {
+    // Same reasoning as the detail page's 404: do not confirm what exists.
+    return { ok: false, error: "That bid no longer exists." };
+  }
+
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // 1. CLAIM. Atomically flips ACTIVE → COMPLETED_ASSIGNED, and only if
+        //    the deadline has not passed. Whoever wins this wins the race.
+        const claimed = await tx.auction.updateMany({
+          where: { id: auctionId, status: "ACTIVE", endTime: { gt: new Date() } },
+          data: { status: "COMPLETED_ASSIGNED" },
+        });
+
+        if (claimed.count === 0) throw new AuctionNoLongerActiveError();
+
+        // 2. The winner.
+        await tx.bid.update({ where: { id: bidId }, data: { status: "ACCEPTED" } });
+
+        // 3. Everyone else. Scoped to PENDING so a re-run cannot demote the
+        //    winner, and so it stays a no-op if this somehow replays.
+        await tx.bid.updateMany({
+          where: { auctionId, id: { not: bidId }, status: "PENDING" },
+          data: { status: "REJECTED" },
+        });
+      },
+      { isolationLevel: "Serializable" },
+    );
+  } catch (error) {
+    if (error instanceof AuctionNoLongerActiveError) {
+      // Expected, not exceptional: cron got there first, or the shipper sat on
+      // the confirm sheet past the deadline. The UI refreshes and shows the
+      // real state rather than reporting a crash.
+      return { ok: false, error: "This auction just closed." };
+    }
+
+    console.error("[acceptBid]", error);
+    return { ok: false, error: "Couldn't accept that bid. Please try again." };
+  }
+
+  // A won auction changes every screen that lists it, on both sides.
+  revalidatePath(`/shipper/auction/${auctionId}`);
+  revalidatePath("/shipper");
+  revalidatePath("/shipper/history");
+  revalidatePath(`/carrier/auction/${auctionId}`);
+  revalidatePath("/carrier");
+  revalidatePath("/carrier/bids");
+
+  return { ok: true, data: undefined };
 }
 
 /** Kept so callers can redirect after a successful create without duplicating the path. */

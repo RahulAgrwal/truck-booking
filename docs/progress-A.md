@@ -13,7 +13,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A3 | [~] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | gate OPENED by B2; started 2026-08-09 |
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [x] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | by Claude 2 — see note below · **A6 gate open** |
-| A6 | [~] | Accept-bid transaction + cron | A5 | | |
+| A6 | [x] | Accept-bid transaction + cron | A5 | | |
 | A7 | [ ] | Shipper history + deploy docs | A6 | | |
 
 Out-of-band: `c6fd860` — pinned npm 11 in the Docker deps stage (Cloud Build `npm ci` fix).
@@ -222,3 +222,42 @@ since `acceptBid` is still a placeholder — the button, the sheet and the error
 through shows the refusal until A6; (2) the seeded auction 5 (`COMPLETED_ASSIGNED`) rendering its assigned
 banner with the right winner; (3) a carrier who bid twice appearing once, which is tested in isolation but
 unproven against real rows; (4) another shipper's auction 404ing.
+
+## A6 notes (by Claude 2)
+
+`acceptBid` per §5.4, `/api/cron` per §5.5, `docs/cloud-scheduler.md`, and
+`src/lib/{auction-close.ts,__tests__/auction-close.test.ts}`.
+
+**The race is the whole point of `acceptBid`.** A shipper accepting and cron expiring can reach the same
+auction at the same instant. Read-then-write loses: both see `ACTIVE`, both proceed, and the row ends up
+assigned *and* expired. The fix is the status-guarded `updateMany` — `WHERE status = 'ACTIVE' AND endTime >
+now()` is atomic, whoever flips it first wins, and the loser gets `count === 0` and aborts. **Nothing is
+decided by anything read beforehand**; the ownership check above the transaction exists only to fail early
+with a better message. Serializable isolation on top, because "assigned with no accepted bid" and "two
+accepted bids" are states the schema cannot recover from.
+
+`AuctionNoLongerActiveError` is a class, not a string, so the `catch` can tell "someone got there first"
+(ordinary — surfaces as *"This auction just closed."* and refreshes) from a real database failure (not).
+
+**The sweep cannot un-assign a won auction**, and that is structural rather than careful: its filter
+requires `status: 'ACTIVE'`, and `acceptBid` has already moved the winner's row to `COMPLETED_ASSIGNED`.
+The same guard from both directions. Bids on an expired auction stay `PENDING` — nobody won, and marking
+them `REJECTED` would claim a decision was made.
+
+**`expiredAuctionWhere` and `shouldClose` are defined together in `auction-close.ts`.** The rule really
+lives in a Prisma `WHERE`, which no unit test can execute, so writing a predicate that merely *resembles*
+the query would test nothing. Both come from one statement of the rule and the test asserts they agree case
+for case — edit one and the other fails. It also pins `lte` (an auction ending exactly now is over), which
+must match `submitBid` guard 4 or there is a millisecond where bids are refused but the auction is open.
+
+**Cron auth fails closed.** An unset `CRON_SECRET` rejects every request rather than running
+unauthenticated — a missing env var must not become an open "close every auction" button. Comparison is
+`timingSafeEqual`. `GET` is accepted alongside `POST`: the sweep is idempotent, and a silent 405 on
+Scheduler's retry path would look like a working schedule that never runs.
+
+**NOT VERIFIED (A6):** nothing exercised against the database. Most likely to be wrong, in order:
+(1) whether Neon accepts `Serializable` on the pooled connection — if it errors, the transaction needs the
+unpooled URL or a lower isolation level, and the guarded `updateMany` still carries the correctness;
+(2) the actual race, which needs two concurrent callers to observe — the unit test covers the predicate,
+not the concurrency; (3) `{ closed: n }` counts against seeded auction 3 (ends ~4 min out); (4) the 401
+path with a real `CRON_SECRET` in Cloud Run.
