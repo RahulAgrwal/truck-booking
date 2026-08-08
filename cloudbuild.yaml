@@ -70,12 +70,25 @@ steps:
     name: ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
     entrypoint: sh
     secretEnv: [DIRECT_URL]
+    # The runner image drops to USER nextjs (uid 1001), but Cloud Build points
+    # HOME at /builder/home, which is root-owned — so npm's first act is to
+    # mkdir /builder/home/.npm and fail with EACCES. Only /tmp is reliably
+    # writable by an arbitrary uid inside a build step, so HOME and the npm
+    # cache both go there. Nothing is persisted between steps anyway.
+    env:
+      - HOME=/tmp
+      - npm_config_cache=/tmp/.npm
+      - npm_config_update_notifier=false
     args:
       - -c
       - |
         set -e
         export DATABASE_URL="$$DIRECT_URL"
-        npx prisma migrate deploy
+        # --yes because npx prompts before fetching a package it cannot resolve
+        # locally, and there is no TTY here to answer it. The standalone output
+        # only traces what the server imports, so the Prisma CLI is not in the
+        # runtime image even though @prisma/client is.
+        npx --yes prisma migrate deploy
 
   # 4. Deploy. Runtime secrets are mounted from Secret Manager — they never
   #    touch the build, the image, or this file.

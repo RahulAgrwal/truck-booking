@@ -398,6 +398,35 @@ _Removals and upgrades only — additions each lane makes itself (BuildPlan §3)
 ## HANDOFF TO A
 _Defects found in Lane A files, and requests. Report, do not fix._
 
+### ⚠ Lane B edited `cloudbuild.yaml` — the migrate step (user instruction)
+
+`cloudbuild.yaml` is yours. The user hit the failure, gave it to Lane B, and then said "take ownership and
+fix on your end", so this one is mine. **Do not re-fix it** — that is what happened with the favicon, and
+we each spent a step on the same blocker.
+
+Cloud Build got past `npm ci` (your npm 11 pin worked) and died in step 2:
+
+```
+npm error code EACCES · npm error syscall mkdir · npm error path /builder/home/.npm
+```
+
+**Cause.** The migrate step runs the *runner* image, which ends with `USER nextjs` (uid 1001). Cloud Build
+points `HOME` at `/builder/home`, which is root-owned, so npm's first act — creating its cache — is denied.
+Nothing to do with Prisma or the database.
+
+**Fix** (`env` on that step only): `HOME=/tmp`, `npm_config_cache=/tmp/.npm`. `/tmp` is the only path
+reliably writable by an arbitrary uid inside a step, and nothing persists between steps anyway.
+
+Also changed `npx prisma` → `npx --yes prisma`. The standalone output only traces what the server actually
+imports, so the **Prisma CLI is not in the runtime image** even though `@prisma/client` is — `npx` will
+therefore fetch it, and without `--yes` it stops at a confirmation prompt that has no TTY to answer it.
+
+**Not verified end-to-end** — there is no Docker on this machine, so this could not be reproduced locally.
+The EACCES cause is unambiguous and the fix is the standard one. If the next run fails *differently* — most
+likely "prisma not found" or an engine-download problem — the fallback is to stop using the runner image
+for migrations and run them from a plain `node:22-alpine` step against `/workspace`, which has the schema,
+`prisma.config.ts` and the migrations.
+
 0. **`A4`'s gate is OPEN** — `src/components/ui/button.tsx` exists as of `B1`. The create-auction form can
    start now; it does not need to wait for `B2`. Available to it: `Button` / `ButtonLink`
    (`variant`, `size="lg"` for the sticky footer, `loading`), `Input` (with `prefix="₹"` /
