@@ -88,8 +88,13 @@ export async function calculateRouteAndCreateAuction(
  *
  * Deliberately not stubbed with a fake success: it must be a status-guarded
  * transaction, and a placeholder that "works" is worse than an absent one.
+ *
+ * A5 widened the signature to the real one so the accept sheet could be built
+ * against it. The body is still the honest refusal — the UI renders the button
+ * and the confirm sheet, and pressing through shows this message until A6
+ * lands.
  */
-export async function acceptBid(): Promise<ActionResult> {
+export async function acceptBid(_input: unknown): Promise<ActionResult> {
   return { ok: false, error: "Accepting bids is not available yet." };
 }
 

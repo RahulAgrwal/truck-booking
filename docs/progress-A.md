@@ -12,7 +12,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
 | A3 | [~] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | gate OPENED by B2; started 2026-08-09 |
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
-| A5 | [~] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | **claimed by Claude 2 / Lane B** on user instruction — see note below |
+| A5 | [x] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | by Claude 2 — see note below · **A6 gate open** |
 | A6 | [ ] | Accept-bid transaction + cron | A5 | | |
 | A7 | [ ] | Shipper history + deploy docs | A6 | | |
 
@@ -180,3 +180,45 @@ CLAUDE.md §0's "never work the other lane's step", so it is recorded loudly rat
 agents editing one screen in one shared checkout is how the favicon fix got done twice.
 
 Claude 1: keep `A3`. If you pick up `A5`/`A6`/`A7`, say so here first and Claude 2 will drop it.
+
+## A5 notes (by Claude 2)
+
+`/shipper/auction/[id]` + `loading` + `error` + `accept-bid-sheet`, from Stitch `d8dfb998…`, plus
+`src/lib/bids.ts` (+12 tests).
+
+**The §3.3 reduction is the substance, so it is pure and tested.** A carrier may bid many times on one
+auction — that is what a reverse auction is — so the list collapses to **one row per carrier, their latest
+bid**, *before* anything is ranked. Without that, a carrier who bid three times looks like three
+competitors. "Best Price" is the global minimum with **ties going to the earliest bid**.
+
+`latestBidPerCarrier` deliberately keeps the *latest* bid, not the lowest, because that is what §3.3 says.
+They coincide today only because `submitBid` guard 6 refuses a bid that does not undercut the carrier's own
+previous one. A test pins them apart, so relaxing that guard later surfaces here rather than in the UI.
+
+**404, not 403, for another shipper's auction.** A "forbidden" page confirms the id exists, which is a
+small enumeration oracle over uuids. "Not found" tells someone poking at ids exactly as much as they should
+get.
+
+**Terminal states render read-only** with a status banner — assigned (with the winner and price) or
+expired ("nobody won"). §3.2 has no arrow out of either, so an accept button there would be a control that
+cannot work. `PollingRefresher` also stops once the auction is not live.
+
+### Deliberate departures from the Stitch markup
+
+| Mockup | Shipped | Why |
+|---|---|---|
+| Carrier ratings — "★ 4.8 (124 trips)" | dropped | **There is no rating data in the schema.** Ratings are on the deferred backlog; rendering a number we do not have would be fabrication |
+| "Sort by: Price ▾" | dropped | §3.3 fixes the order (amount ascending). A dropdown with one option is a dead control |
+| "Flatbed" truck type | dropped | Not in the schema either |
+| `150 km` static | `formatRouteSummary` | Real Distance Matrix data, degrading to "Distance unavailable" (§10.4) |
+| Timer `00h 45m 12s` | `<Timer>` | Lane A's own tested formatter, via B2's component |
+
+**One change to a file outside A5's list:** `acceptBid` in `src/lib/actions/auction.ts` was widened from
+`()` to `(_input: unknown)` so the accept sheet could be built against the real call shape. **The body is
+untouched** — still the honest "not available yet" refusal. A6 fills it in.
+
+**NOT VERIFIED (A5):** nothing rendered. Most likely to be wrong, in order: (1) the accept flow end to end,
+since `acceptBid` is still a placeholder — the button, the sheet and the error path all work, but pressing
+through shows the refusal until A6; (2) the seeded auction 5 (`COMPLETED_ASSIGNED`) rendering its assigned
+banner with the right winner; (3) a carrier who bid twice appearing once, which is tested in isolation but
+unproven against real rows; (4) another shipper's auction 404ing.
