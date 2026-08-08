@@ -1,13 +1,267 @@
 @import "tailwindcss";
 
 /*
-  A0 STUB — Lane B replaces this file wholesale in step B0.
+  TruckingGO design system — Tailwind v4 is CSS-first, so this file IS the
+  config. There is no tailwind.config.ts (TechnicalDocument.md §2.4).
 
-  B0 defines the full Material-3 token set here via Tailwind v4's `@theme`
-  (colors, spacing, radii, the Inter type scale), loads Material Symbols, and
-  adds the mobile shell rules: overscroll-behavior, overflow-x, tap-highlight,
-  touch-action, safe areas and prefers-reduced-motion.
+  Every value below is transcribed from CLAUDE.md §4, which is the single
+  source of truth and supersedes PRD §6 — none of the PRD's navy/slate/emerald
+  palette survives. (The banned values are listed in BuildPlan.md's B0 accept
+  criteria; they are deliberately NOT repeated here, because the check is a
+  grep over src/ and a comment quoting them would fail it.)
 
-  Tokens are transcribed in CLAUDE.md §4. Note Tailwind v4 has no
-  tailwind.config.ts — tokens are CSS-first, and they live here.
+  One near-collision is legitimate: `primary-container` is the safety orange
+  the PRD also named. CLAUDE.md §4.1 spells it lowercase, and that is the
+  spelling the grep tolerates.
+
+  These tokens are ADDITIVE. Tailwind's default scales (text-sm, w-16, p-3,
+  shadow-sm …) stay available — Lane A's screens already use them.
 */
+
+/*
+  Class-based dark mode (§6.1), not prefers-color-scheme: light mode is the
+  shipping default and the only mode that gets pixel-verified, so the OS must
+  not be able to flip the app on its own. Nothing sets .dark yet; the Stitch
+  markup's dark:* utilities resolve against the same token set.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Colors, type scale, spacing, radii ─────────────────────────────────── */
+
+@theme {
+  /* Brand — CLAUDE.md §4.1 */
+  --color-primary: #a04100;
+  --color-primary-container: #ff6b00; /* the safety orange */
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #572000;
+  --color-primary-fixed: #ffdbcc;
+  --color-primary-fixed-dim: #ffb693;
+  --color-inverse-primary: #ffb693;
+  --color-on-primary-fixed: #351000;
+  --color-on-primary-fixed-variant: #7a3000;
+  --color-surface-tint: #a04100;
+
+  /* Secondary */
+  --color-secondary: #565e74;
+  --color-secondary-container: #dae2fd;
+  --color-secondary-fixed: #dae2fd;
+  --color-secondary-fixed-dim: #bec6e0;
+  --color-on-secondary: #ffffff;
+
+  /* Tertiary — accepted / won */
+  --color-tertiary: #006c49;
+  --color-tertiary-container: #00ae78;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #003925;
+
+  /* Error — LIVE badge, expiring timer, destructive */
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  /* Surfaces */
+  --color-background: #f7f9fb;
+  --color-surface: #f7f9fb;
+  --color-surface-bright: #f7f9fb;
+  --color-surface-container-lowest: #ffffff; /* card background */
+  --color-surface-container-low: #f2f4f6; /* inset metadata strip */
+  --color-surface-container: #eceef0;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  --color-surface-variant: #e0e3e5; /* card border, neutral chip fill */
+  --color-surface-dim: #d8dadc;
+
+  /* Content */
+  --color-on-background: #191c1e;
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #5a4136;
+  --color-outline: #8e7164;
+  --color-outline-variant: #e2bfb0;
+  --color-inverse-surface: #2d3133;
+  --color-inverse-on-surface: #eff1f3;
+
+  /* Type scale — CLAUDE.md §4.2. Applied as a pair: `font-x text-x`. */
+  --text-label-bold: 12px;
+  --text-label-bold--line-height: 16px;
+  --text-label-bold--font-weight: 700;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 400;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 400;
+
+  --text-timer-md: 18px;
+  --text-timer-md--line-height: 24px;
+  --text-timer-md--font-weight: 800;
+
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 28px;
+  --text-headline-md--font-weight: 700;
+
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-lg--font-weight: 700;
+
+  --text-display-price: 32px;
+  --text-display-price--line-height: 40px;
+  --text-display-price--font-weight: 900;
+  --text-display-price--letter-spacing: -0.02em;
+
+  /* Spacing — CLAUDE.md §4.3. 4px unit. */
+  --spacing-unit: 4px;
+  --spacing-stack-sm: 8px;
+  --spacing-gutter-mobile: 12px;
+  --spacing-stack-md: 16px;
+  --spacing-margin-mobile: 16px;
+  --spacing-stack-lg: 24px;
+  --spacing-touch-target-min: 48px; /* → h-touch-target-min, the §7.6 floor */
+
+  /*
+    Radii. These match Tailwind's own defaults digit for digit; they are
+    restated so the design system owns them explicitly rather than by luck.
+    `rounded-full` is left to Tailwind — its calc(infinity * 1px) is the same
+    thing as the token table's 9999px.
+  */
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+/*
+  Font families must be `inline`. next/font defines --font-inter on <body>
+  (src/app/layout.tsx), but a plain @theme block substitutes var(--font-inter)
+  at :root — where it does not exist yet — and the dead value inherits down.
+  `inline` emits the reference into each utility instead, so it resolves on the
+  element, inside <body>, where the variable actually lives.
+*/
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-label-bold: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-body-md: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-body-lg: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-timer-md: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-headline-md: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display-price: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Safe areas ─────────────────────────────────────────────────────────── */
+
+/*
+  env(safe-area-inset-*) utilities, hand-rolled rather than pulled from a
+  plugin — Tailwind v4 needs no plugin for this, so `DEPS REQUESTED` in
+  docs/progress-B.md stays empty. Paired with viewport-fit=cover in
+  layout.tsx's viewport export (CLAUDE.md §3.1).
+*/
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility mt-safe {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Fixed bars need the inset ON TOP of their own padding, not instead of it. */
+@utility h-safe-top {
+  height: env(safe-area-inset-top, 0px);
+}
+@utility h-safe-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Base layer: the mobile shell rules ─────────────────────────────────── */
+
+@layer base {
+  html {
+    /*
+      This is a PWA, not a page: no rubber-band, no horizontal scroll, no
+      grey tap flash, no 300ms click delay (TechnicalDocument.md §7.1).
+    */
+    overscroll-behavior: none;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    /* Light is the shipping default — don't let the OS restyle form controls. */
+    color-scheme: light;
+  }
+
+  body {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+    /*
+      Set here rather than via --font-sans alone: --font-inter is defined on
+      <body> by next/font, so this is the one selector guaranteed to see it.
+    */
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--color-primary-fixed);
+    color: var(--color-on-primary-fixed);
+  }
+
+  /*
+    Material Symbols is a webfont, not a React package (CLAUDE.md §4.5). The
+    <link> lives in layout.tsx; this is the base class that makes a ligature
+    render as a glyph. FILL 0 = outline/inactive, FILL 1 = filled/active, set
+    per-icon via font-variation-settings.
+
+    In @layer base, so `text-2xl` and friends still win on size.
+  */
+  .material-symbols-outlined {
+    font-family: "Material Symbols Outlined", sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    font-variation-settings:
+      "FILL" 0,
+      "wght" 400,
+      "GRAD" 0,
+      "opsz" 24;
+    -webkit-font-feature-settings: "liga";
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  /*
+    §7.7: reduced motion must also stop the LIVE badge's animate-ping, which
+    is the most persistent animation in the app.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

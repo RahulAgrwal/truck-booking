@@ -475,18 +475,42 @@ here or they will drift. This section covers what CLAUDE.md doesn't: how the tok
 
 ### 6.1 Token plumbing
 
-Tokens are declared **once** in `tailwind.config.ts` under `theme.extend` (`colors`, `borderRadius`,
-`spacing`, `fontFamily`, `fontSize`) using the exact key names from the Stitch config, and mirrored as CSS
-custom properties in `globals.css` for the few places Tailwind can't reach (`::selection`,
-`theme-color` meta, scrollbar). `src/lib/design/tokens.ts` re-exports the same values as typed constants
-for any TS that needs them (chart-free, but the timer's threshold colors use it).
+> **Corrected in `B0`.** This section previously described a `tailwind.config.ts` with a `theme.extend`
+> object and a `darkMode: 'class'` key. Neither exists: Tailwind v4 is CSS-first (§2.4). The description
+> below is what was actually built.
 
-Shadcn primitives are generated then **retheme**d: their default `--primary`/`--destructive` CSS variables
-are repointed at `primary-container` / `error`. Do not keep Shadcn's stock slate palette anywhere.
+Tokens are declared **once**, in the `@theme { }` block of `src/app/globals.css`, using the
+`--color-* / --text-* / --spacing-* / --radius-*` namespaces — those namespace prefixes are what generate
+`bg-primary-container`, `text-display-price`, `p-margin-mobile`, `rounded-lg` and the rest. Tailwind emits
+every one of them as a real CSS custom property on `:root`, so the places Tailwind can't reach
+(`::selection`, the base layer's `background-color`) read `var(--color-…)` directly rather than needing a
+second, hand-maintained mirror. `src/lib/design/tokens.ts` re-exports the same values as typed constants
+for the TS that needs a value rather than a class (the PWA theme color, SVG fills, the timer's threshold).
 
-`darkMode: 'class'`. Dark values exist in the Stitch markup (`dark:bg-surface-dim`,
-`dark:text-primary-container`, `dark:text-secondary-fixed-dim`, `dark:bg-surface-container-highest`) — carry
-them through, but light mode is the shipping default and the only one that must be pixel-verified.
+Two details the `@theme` block depends on:
+
+- **The block is additive.** It does not reset Tailwind's default scales, because the app's own screens use
+  them (`text-sm`, `w-16`, `p-3`, `shadow-sm`). Declaring `--text-*: initial` would break them.
+- **Font families are declared in a separate `@theme inline` block.** `next/font` defines `--font-inter` on
+  `<body>`; a plain `@theme` substitutes `var(--font-inter)` at `:root`, where it does not exist, and the
+  dead value then inherits down to every element. `inline` puts the reference in the utility itself so it
+  resolves on the element. `body { font-family: … }` in the base layer carries the default.
+
+Shadcn primitives are **not** generated, a deviation from `BuildPlan.md` `B1`. The decisive reason is
+ownership: `shadcn init` writes `components.json` and pulls in `clsx`, `tailwind-merge`,
+`class-variance-authority` and `@radix-ui/*`, all of which are edits to `package.json` — **a Lane A file
+that Lane B may not touch** (BuildPlan §3). Routing four dependencies through `DEPS REQUESTED` to buy
+components whose variable naming (`--primary`, `--destructive`), stock slate palette and centred-dialog
+defaults would then have to be stripped and rebuilt against the M3 tokens is a bad trade; every retheme
+also tends to leave stray slate behind, which `B0`'s no-raw-hex rule forbids. `B1` hand-writes the nine
+primitives against the tokens above, with no new dependencies. Do not introduce Shadcn's palette anywhere.
+
+Dark mode is **class-based** — `@custom-variant dark (&:where(.dark, .dark *));` in `globals.css`, the v4
+equivalent of the old `darkMode: 'class'`. Deliberately not `prefers-color-scheme`: light is the shipping
+default and the only mode that gets pixel-verified, so the OS must not be able to flip the app on its own.
+The dark values in the Stitch markup (`dark:bg-surface-dim`, `dark:text-primary-container`,
+`dark:text-secondary-fixed-dim`, `dark:bg-surface-container-highest`) resolve against the same token set —
+carry them through as written.
 
 ### 6.2 Component inventory
 
