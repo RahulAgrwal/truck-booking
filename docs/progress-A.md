@@ -128,44 +128,26 @@ Both Maps keys are currently blank in `.env.local`, so the autocomplete runs in 
 
 ## HANDOFF TO B
 
-### ✅ FIXED (by Lane A, on the user's explicit instruction) — `favicon.ico` RGBA
+### ✅ RESOLVED by Lane B — `favicon.ico` RGBA (`f5b7b62`)
 
-Cloud Build dies in `next build`, after `npm ci` now succeeds:
+Cloud Build failed in `next build` on `src/app/favicon.ico`:
+`Format error decoding Ico: The PNG is not in RGBA format!`
 
-```
-./src/app/favicon.ico
-Error: Processing image failed — unable to decode image data
-Caused by: Format error decoding Ico: The PNG is not in RGBA format!
-```
+**Diagnosis (Lane A, `ecf29fb`).** B0's hand-rolled rasteriser wrote PNGs with **colour type 2 (RGB)**;
+Turbopack's ICO decoder accepts only **colour type 6 (RGBA)**. Both `src/app/favicon.ico` and
+`public/icons/favicon.ico`, all three sizes.
 
-**Diagnosis (verified locally).** B0's hand-rolled rasteriser writes PNGs with **colour type 2 (RGB)**.
-Turbopack's ICO decoder only accepts **colour type 6 (RGBA)**. Both copies are affected:
+**Fixed by Lane B in `f5b7b62`** — verified on `main`: 3 images, 867 bytes, all `colorType=6`. A clean
+`npm run build` here now passes.
 
-```
-src/app/favicon.ico      16x16, 32x32, 48x48 — all PNG bitDepth=8 colorType=2 (RGB)
-public/icons/favicon.ico  same
-```
+**Note on process.** The user told Lane A to fix it directly, so I converted both files locally
+(decode → add opaque alpha → re-encode, artwork pixel-identical). Lane B had already pushed the same fix,
+and my result was byte-identical, so **there was nothing to commit** — the conversion is discarded and
+`f5b7b62` stands as the fix. Duplicated effort, no duplicated code: the cost of both lanes chasing one
+blocker in a shared checkout.
 
-**Fix:** emit 4 channels per pixel (RGBA, `colorType = 6`) instead of 3 in the ICO's PNG encoder, with
-alpha `0xFF` throughout — the mark is opaque, so nothing else changes. The standalone `.png` icons are fine
-and unaffected; it is only the PNGs *inside* the ICO container.
-
-**This is your file** (carve-out, `9fa3242`) and I edited it anyway — the user instructed me to, with
-Cloud Build blocked. Flagging it plainly so the override is visible rather than silent.
-
-**What I changed.** Not a redraw: the existing PNGs were decoded (inflate → undo scanline filters), given
-an opaque alpha channel, and re-encoded as `colorType = 6`. The artwork is pixel-identical; only the
-channel count changed. Directory entries now declare `bitCount = 32`. 825 → 867 bytes each.
-
-**Your encoder still emits RGB.** If B0's generator is ever re-run it will reintroduce this, so the real
-fix is still yours: emit 4 channels with alpha `0xFF`. The conversion script was a throwaway in scratch and
-is not committed, matching B0's own decision not to commit its rasteriser.
-
-Two notes:
-- `npm run build` does **not** reproduce this on an already-built `.next` — it needs a clean build, which is
-  why B0's local pass missed it.
-- Anyone needing an immediate unblock can delete `src/app/favicon.ico`; `metadata.ts` already points at
-  `/icons/favicon.ico`, so the app keeps its icon. That is a workaround, not the fix.
+Why B0's local build missed it: Turbopack only re-decodes the icon on a **clean** build. `rm -rf .next`
+before trusting an icon change.
 
 ### Earlier items (all actioned by Lane A)
 1. Shell API — noted; `A3`/`A5` compose `TopAppBar` + `AppScreen` + `MobileNav`, `A4` passes `hasNav={false}`.
