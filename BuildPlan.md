@@ -70,18 +70,24 @@ LOOP:
              (The other lane is mid-step; the gate WILL open. Never work their step to unblock yourself.)
        · No eligible step because my lane is finished?
            → go to §7 Verification phase.
-  4. Mark it IN_PROGRESS in docs/progress-<lane>.md.
+  4. Mark it [~] in docs/progress-<lane>.md — then COMMIT AND PUSH that one line, before building.
+       · [~] is a claim the other lane can see. A [~] that survives several of their pulls means stuck.
+       · Commit message: "<StepID>: start".
   5. Implement it. Touch ONLY files in my ownership list (§3).
+       · Screen in docs/stitch-screens.md? Start at Stitch — re-list, download, read the MARKUP (§8).
+       · One of the three undesigned screens? Start at Mobbin for the shape, then build it from
+         primitives that already exist. Never generate a new Stitch screen for them.
   6. Confirm the step's own Build items are complete, and the cheap checks in CLAUDE.md §10.1.
        · Toolchain verification (typecheck / lint / build / device sweep) is DEFERRED to §7.
        · Record a NOT VERIFIED line in the ledger naming what you skipped and what is most likely wrong.
        · A defect you actually noticed is still a defect. Fix it now; do not log it and move on.
-  7. Update docs/progress-<lane>.md → DONE + notes. Update any doc section the step changed.
+  7. Flip [~] → [x] in docs/progress-<lane>.md, + notes + NOT VERIFIED line. Update any doc the step changed.
   8. git add -A
      git commit -m "<StepID>: <summary>"
      git pull --rebase origin main        ← the other lane has been pushing
      git push origin main                 ← push immediately; an unpushed commit is a closed gate
-  9. GOTO LOOP
+  9. GOTO LOOP   ← immediately. [x] is the top of the loop, not a stopping point.
+                   Never ask the user whether to continue; §0 is the only stop in the build.
 ```
 
 **Idling is a last resort, not a first response.** Before you sleep on a gate, check every remaining step in
@@ -322,8 +328,12 @@ stubs handed to Lane B: `src/app/globals.css`, `src/components/app-shell.tsx`,
    production build — see TechnicalDocument.md §4.4 for why the enforcement is at runtime instead.
 3. `tsconfig.json`: `strict: true`, `noUncheckedIndexedAccess: true`.
 4. Install `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `zod`, `firebase`, `firebase-admin`,
-   `server-only`, and dev `vitest`, `tsx`, `dotenv`. Do **not** init Shadcn here — B1 generates and rethemes
-   its primitives against B0's tokens.
+   `server-only`, and dev `vitest`, `tsx`, `dotenv`. Do **not** init Shadcn — B1 hand-writes its primitives
+   against B0's tokens instead (Lane B's call, recorded in TechnicalDocument.md §6.1: Shadcn would add four
+   dependencies to a Lane A file and then need its slate palette stripped out anyway).
+   **Run `npm install` once, not several times in a row** — interleaved installs left the lockfile with an
+   unsatisfiable top-level `picomatch` entry, which `npm ci` rejects and which only surfaced in Cloud Build.
+   Always finish with `npm ci --ignore-scripts` locally to prove the lockfile is what Docker will accept.
 5. `prisma/schema.prisma` — TechnicalDocument.md §3.1 verbatim (indexes and the Google Maps route fields
    included). Prisma 7: generator `prisma-client` with an `output`, datasource carries only `provider`.
 6. `prisma.config.ts` — loads `.env.local` via dotenv and points `datasource.url` at `DIRECT_URL`
@@ -762,11 +772,15 @@ It is a **per-checkout** file — each of the two working copies holds its own v
 ```markdown
 # Lane <X> Progress
 
-| Step | Status | Commit | Notes |
-|------|--------|--------|-------|
-| X0   | TODO   |        |       |
+| Step | Status | Title | Gate | Commit | Notes |
+|------|--------|-------|------|--------|-------|
+| X0   | [x]    |       |      | <sha>  |       |
+| X1   | [~]    |       |      |        | started <timestamp>  |
+| X2   | [ ]    |       |      |        |       |
+| X3   | [!]    |       |      |        | BLOCKED(<gate>)      |
 
-Status: TODO · IN_PROGRESS · DONE · BLOCKED(<gate>)
+Status markers — [~] goes in BEFORE the work starts, and is pushed on its own (§1 step 4):
+  [ ] not started   [~] in progress, right now   [x] done + pushed   [!] blocked on a gate
 
 ## NOT VERIFIED          (per step — the worklist §7 inherits; see CLAUDE.md §10.2)
 <StepID> — what was skipped; where it is most likely to be wrong
@@ -790,6 +804,10 @@ Status: TODO · IN_PROGRESS · DONE · BLOCKED(<gate>)
 4. Never force-push; never rewrite pushed history.
 5. One step, one commit, one push — and push the moment it's done. Gates are files on `main`; an unpushed
    commit is a gate the other lane is still waiting on.
-6. After §0, never stop to ask the user. A gate that isn't open is a 60-second wait, not a question.
+6. After §0, never stop to ask the user. A gate that isn't open is a 60-second wait, not a question, and
+   a finished step is the top of the loop, not a place to check in.
+6a. Claim before you build: `[~]` into the ledger and pushed, *then* the work (§1 step 4).
+6b. Start at the MCP, not at a blank file: Stitch for any designed screen, Mobbin for the three that
+    aren't (CLAUDE.md §8).
 7. Never add a `md:`/`lg:` breakpoint, a raw hex, or a desktop layout. This is a mobile app.
 8. Two checkouts, never one (§0). One Neon database — only Lane A seeds it (§3).

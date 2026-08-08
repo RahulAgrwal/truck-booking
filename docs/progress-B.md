@@ -1,22 +1,24 @@
 # Lane B Progress — design system, shared components, Carrier vertical
 
 Owned by **Claude 2**. Step definitions: [`../BuildPlan.md` §6](../BuildPlan.md).
-Status values: `TODO` · `IN_PROGRESS` · `DONE` · `BLOCKED(<gate>)`
+
+Status markers — **`[~]` goes in before the work starts and is pushed on its own** (BuildPlan §1 step 4):
+`[ ]` not started · `[~]` in progress right now · `[x]` done + pushed · `[!]` blocked on a gate
 
 > **Lane identity.** The user assigned this session Claude 2 / Lane B directly (CLAUDE.md §0).
 > `docs/LANE.md` in this checkout reads `LANE: A` — **both instances are running in the same working
 > directory**, and Lane A owns that file, so it is left alone. If this session is resumed after a
 > compaction, trust this line, not `LANE.md`.
 
-| Step | Title | Gate | Status | Commit | Notes |
-|------|-------|------|--------|--------|-------|
-| B0 | Design tokens, global styles, PWA shell | `package.json` | **DONE** | `7690c9e` | B1 gate is OPEN (`@theme` present) |
-| B1 | UI primitives | `@theme` in `globals.css` | **DONE** | | **A4's gate is OPEN** — `ui/button.tsx` exists |
-| B2 | Shared components | B1 | TODO | | opens A3 + A5 gates — push promptly |
-| B3 | Carrier load feed | `session.ts` + `schema.prisma` | TODO | | gate already satisfied by A1 |
-| B4 | Place a bid | `schemas.ts` | TODO | | gate already satisfied by A1 |
-| B5 | My Bids | B4 | TODO | | |
-| B6 | Profile, state coverage, a11y pass | B5 | TODO | | |
+| Step | Status | Title | Gate | Commit | Notes |
+|------|--------|-------|------|--------|-------|
+| B0 | `[x]` | Design tokens, global styles, PWA shell | `package.json` | `7690c9e` | B1 gate is OPEN (`@theme` present) |
+| B1 | `[x]` | UI primitives | `@theme` in `globals.css` | `c9e599d` | **A4's gate is OPEN** — `ui/button.tsx` exists |
+| B2 | `[~]` | Shared components | B1 | | **opens A3 + A5 gates — push promptly** |
+| B3 | `[ ]` | Carrier load feed | `session.ts` + `schema.prisma` | | gate already satisfied by A1 · Stitch `36d28947…` |
+| B4 | `[ ]` | Place a bid | `schemas.ts` | | gate already satisfied by A1 · Stitch `69e048b5…` + `16fc1711…` |
+| B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
+| B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
 
 ## B0 notes
 

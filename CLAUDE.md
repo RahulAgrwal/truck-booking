@@ -409,14 +409,46 @@ ownership list, `git rebase --continue`. Two failed attempts → `git rebase --a
 
 ## 8. MCP resources
 
-**Stitch** — project `5704144700317982042` ("TruckingGO Logistics Marketplace").
-Screen IDs and their target routes are in [`docs/stitch-screens.md`](./docs/stitch-screens.md).
-`mcp__stitch__list_screens` returns fresh signed `downloadUrl`s for each screen's HTML — **the download
-URLs expire, so re-list rather than reusing an old URL.** Read the HTML for exact classes; do not eyeball
-the screenshot.
+**Use them.** Every step that builds a screen starts at one of these two, before a line of markup is
+written. Guessing at a layout that Stitch already specifies, or inventing a pattern for a screen Mobbin has
+fifty examples of, is wasted work that then has to be undone.
 
-**Mobbin** — `mcp__mobbin__search_screens` / `search_flows`, for pattern reference when composing one of
-the three undesigned screens. Reference, not source of truth: the tokens in §4 always win.
+### Stitch — for the ten screens that are designed
+
+Project `5704144700317982042` ("TruckingGO Logistics Marketplace"). Screen IDs → routes → owning steps are
+in [`docs/stitch-screens.md`](./docs/stitch-screens.md).
+
+```
+mcp__stitch__list_screens(projectId: "5704144700317982042")   → fresh signed downloadUrls
+curl -sL -o screen.html "<downloadUrl>"                        → then READ the markup
+```
+
+- **Re-list every time.** The signed `downloadUrl`s expire; one copied from an older transcript will fail
+  or, worse, return stale markup.
+- **Read the HTML, never the screenshot.** The exact Tailwind classes are the spec. A screenshot tells you
+  roughly what it looks like; the markup tells you which token was used, and those are the two things that
+  actually have to match.
+- `mcp__stitch__get_screen` takes the full resource name —
+  `projects/5704144700317982042/screens/<screenId>` — and both deprecated `projectId` / `screenId` params
+  as well. If it errors, fall back to `list_screens`, which always works.
+- **Where the markup and CLAUDE.md §4 disagree, the markup wins** — fix §4 and note it in your ledger.
+  Two known exceptions the markup gets wrong: prices show `$`, but the app is **₹** (§6); and a few Stitch
+  classes reference tokens that do not exist (`text-navy-blue`, `btn-active`), which map to their §4
+  equivalents.
+- Screens are 780×1768 frames. **You are building for 390×844** — halve, don't copy pixel counts.
+
+### Mobbin — for the three screens that are not designed
+
+`mcp__mobbin__search_screens` / `search_flows` / `search_sections`, for `/carrier/bids` (`B5`),
+`/shipper/history` (`A7`) and `/profile` (`B6`).
+
+Reference, not source of truth: **the tokens in §4 always win**, and you compose from primitives that
+already exist rather than importing a new visual language. Use it to answer "what shape does this screen
+want to be" — a segmented control, a status list, a decision card — then build that shape out of `Card`,
+`Chip`, `Badge` and the rest. Starting points are listed in §4.6.
+
+**Do not generate new Stitch screens** for the undesigned three (BuildPlan.md §9). The design system is
+closed; three hand-composed screens are the plan, not a gap in it.
 
 ---
 
@@ -455,6 +487,27 @@ the three undesigned screens. Reference, not source of truth: the tokens in §4 
 > The reason is throughput and independence: the two lanes share one `package.json` and one Neon database,
 > so a red build is very often the *other* lane's half-landed step rather than yours — and chasing it
 > serialises two agents that are supposed to run in parallel.
+
+### 10.0 Claim the step before you start it
+
+Your ledger uses four markers. **`[~]` goes in before the first line of code, not after.**
+
+| Marker | Means |
+|---|---|
+| `[ ]` | Not started |
+| `[~]` | **In progress — I am working on this right now** |
+| `[x]` | Done, committed, pushed |
+| `[!]` | Blocked on a gate — note which one |
+
+The order is: mark `[~]` → **commit and push that one-line change** → then build. It costs one small commit
+and it is what makes two agents legible to each other: the other lane can see what you are inside of, and a
+`[~]` that has been sitting there across several of their pulls is a signal that something is stuck.
+
+When the step is done, flip `[~]` → `[x]` in the same commit as the work.
+
+**Then start the next eligible step immediately — no pause, no check-in, no asking.** Marking `[x]` is not
+a stopping point; it is the top of the loop (BuildPlan.md §1). The only moment you stop for the user is
+§0, at session start.
 
 ### 10.1 Build phase — what "done" means right now
 
