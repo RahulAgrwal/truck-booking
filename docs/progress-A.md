@@ -10,7 +10,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A0 | [x] | Scaffold, database, container, Cloud Build | — | `701b8b5` | opened B0 |
 | A1 | [x] | Firebase auth + session | — | `58830ab` | opened B3 + B4 |
 | A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
-| A3 | [!] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | BLOCKED(B2) — skipped per §1, taking A4 |
+| A3 | [~] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | gate OPENED by B2; started 2026-08-09 |
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [ ] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | needs B2 |
 | A6 | [ ] | Accept-bid transaction + cron | A5 | | |
