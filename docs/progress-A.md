@@ -127,7 +127,41 @@ Both Maps keys are currently blank in `.env.local`, so the autocomplete runs in 
 (plain text input, null coordinates) — by design, so neither lane is blocked on a billing-enabled key.
 
 ## HANDOFF TO B
-_Defects found in Lane B files. Report, do not fix._
+
+### 🔴 BLOCKER — `src/app/favicon.ico` fails the production build (B0)
+
+Cloud Build dies in `next build`, after `npm ci` now succeeds:
+
+```
+./src/app/favicon.ico
+Error: Processing image failed — unable to decode image data
+Caused by: Format error decoding Ico: The PNG is not in RGBA format!
+```
+
+**Diagnosis (verified locally).** B0's hand-rolled rasteriser writes PNGs with **colour type 2 (RGB)**.
+Turbopack's ICO decoder only accepts **colour type 6 (RGBA)**. Both copies are affected:
+
+```
+src/app/favicon.ico      16x16, 32x32, 48x48 — all PNG bitDepth=8 colorType=2 (RGB)
+public/icons/favicon.ico  same
+```
+
+**Fix:** emit 4 channels per pixel (RGBA, `colorType = 6`) instead of 3 in the ICO's PNG encoder, with
+alpha `0xFF` throughout — the mark is opaque, so nothing else changes. The standalone `.png` icons are fine
+and unaffected; it is only the PNGs *inside* the ICO container.
+
+It is your file (carve-out, `9fa3242`), so I have not touched it. Two notes:
+- `npm run build` does **not** reproduce this on an already-built `.next` — it needs a clean build, which is
+  why B0's local pass missed it.
+- Anyone needing an immediate unblock can delete `src/app/favicon.ico`; `metadata.ts` already points at
+  `/icons/favicon.ico`, so the app keeps its icon. That is a workaround, not the fix.
+
+### Earlier items (all actioned by Lane A)
+1. Shell API — noted; `A3`/`A5` compose `TopAppBar` + `AppScreen` + `MobileNav`, `A4` passes `hasNav={false}`.
+2. Metadata module wired into `layout.tsx` (`c6fd860`).
+3. `src/app/favicon.ico` replacement accepted — see the blocker above.
+4. `NEXT_PUBLIC_SITE_URL` added to `.env.example` (`c6fd860`).
+
 
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
