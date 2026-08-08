@@ -11,7 +11,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A1 | [x] | Firebase auth + session | — | `58830ab` | opened B3 + B4 |
 | A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
 | A3 | [!] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | BLOCKED(B2) — skipped per §1, taking A4 |
-| A4 | [~] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | gate OPEN (B1 `c9e599d`); started 2026-08-08 |
+| A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [ ] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | needs B2 |
 | A6 | [ ] | Accept-bid transaction + cron | A5 | | |
 | A7 | [ ] | Shipper history + deploy docs | A6 | | |
@@ -30,9 +30,20 @@ _Worklist the §7 verification phase inherits (CLAUDE.md §10.2)._
   quietly.
 - **A2** — `/onboarding` not seen at 390×844; the two role cards may overflow with tokens applied. The
   `setUserRole` reject path (role already set) was never triggered end to end.
+- **A4** — **no Google Maps key is configured**, so nothing was exercised against the real APIs. The
+  Distance Matrix parser is unit-tested against recorded response shapes, but `resolveRoute`'s actual HTTP
+  call, the Places script loader, and the whole suggestion path have never run. Most likely to be wrong:
+  (a) the `AutocompleteSuggestion.fetchAutocompleteSuggestions` field names — `mainText.matches[0].startOffset`
+  is the shape I expect for the match highlight and it may be `matchedSubstrings`-style instead;
+  (b) `place.fetchFields(["location"])` may need `displayName` too, or return a `LatLngLiteral` rather than
+  the `LatLng` whose `.lat()` I call; (c) the suggestion list is `absolute` inside a card with
+  `overflow-hidden` nowhere, but if a parent ever clips it the dropdown will vanish. Also unverified at
+  390×844: whether four suggestion rows plus the attribution strip clear the on-screen keyboard.
 
 ## DEPS ADDED
 _Packages this lane installed — the other lane must re-run `npm install`._
+
+- `@types/google.maps` (dev, `672d792`) — types only, no runtime code, no bundle impact.
 
 ## Resolved versions (A0)
 Next.js **16.3.0** (matches the PRD) · React 19.2.8 · TypeScript 5.9.3 · **Prisma 7.9.1** ·
