@@ -129,6 +129,22 @@
   --radius: 0.25rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+
+  /*
+    B1: the bottom sheet's entrance. Declared as a theme animation so it is
+    `animate-sheet-up`, like any other utility — and so the reduced-motion
+    block below collapses it along with everything else.
+  */
+  --animate-sheet-up: sheet-up 240ms cubic-bezier(0.2, 0, 0, 1);
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
 }
 
 /*

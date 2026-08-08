@@ -10,8 +10,8 @@ Status values: `TODO` · `IN_PROGRESS` · `DONE` · `BLOCKED(<gate>)`
 
 | Step | Title | Gate | Status | Commit | Notes |
 |------|-------|------|--------|--------|-------|
-| B0 | Design tokens, global styles, PWA shell | `package.json` | **DONE** | | B1 gate is OPEN (`@theme` present) |
-| B1 | UI primitives | `@theme` in `globals.css` | TODO | | gate corrected — there is no `tailwind.config.ts` |
+| B0 | Design tokens, global styles, PWA shell | `package.json` | **DONE** | `7690c9e` | B1 gate is OPEN (`@theme` present) |
+| B1 | UI primitives | `@theme` in `globals.css` | **DONE** | | **A4's gate is OPEN** — `ui/button.tsx` exists |
 | B2 | Shared components | B1 | TODO | | opens A3 + A5 gates — push promptly |
 | B3 | Carrier load feed | `session.ts` + `schema.prisma` | TODO | | gate already satisfied by A1 |
 | B4 | Place a bid | `schemas.ts` | TODO | | gate already satisfied by A1 |
@@ -69,6 +69,42 @@ Recorded in TechnicalDocument.md §6.1.
 
 `npm run db:seed` was **not** run; per BuildPlan §3 seeding is Lane A's alone, and `B0` touches no data.
 
+## B1 notes
+
+Nine primitives per TechnicalDocument.md §6.2, plus three that earned their place:
+`Icon` (every other primitive needs a Material Symbols glyph, and `EmptyState` takes one as a prop),
+`ErrorState` (the `error.tsx` counterpart to `EmptyState` — §7.5 requires both), and `CardMetaStrip`
+(the §4.4 inset strip, used by both `AuctionCard` variants in B2). Supporting helper: `src/lib/design/cn.ts`.
+
+**No Shadcn, no new dependencies** — the decision and its reasoning are in TechnicalDocument.md §6.1.
+`cn.ts` is a five-line class joiner, not `clsx` + `tailwind-merge`: nothing here emits two classes from the
+same Tailwind group, because each variant map picks exactly one value per property, so there is no conflict
+left to merge. The cost is that a caller's `className` cannot reliably override a variant — Tailwind
+resolves conflicts by CSS source order, not attribute order. Add a variant instead of fighting it.
+
+**`"use client"` on exactly two files**, per CLAUDE.md §3.2's list: `chip.tsx` (filter chips own selection
+state) and `input.tsx` (`useId`, and every screen using it is a form). `sheet.tsx` is a third — it needs
+`useEffect` for Escape, scroll-lock and focus. Everything else is directive-free, so it works in a Server
+Component and gets pulled into the client bundle only where a client parent imports it.
+
+Decisions worth knowing before building on these:
+
+- **`Sheet` is not a `<dialog>`.** `showModal()` centres the element by UA stylesheet and its `::backdrop`
+  sits outside the token system, so both would have to be overridden — more code than implementing the
+  four modal behaviours directly. It slides from the bottom and the footer is sticky, because §7.6 puts the
+  confirm button in the thumb zone. A centred modal here is a bug, not a variation.
+- **`Chip` is `h-touch-target-min`.** 48px chips read chunkier than a desktop filter bar; CLAUDE.md §3.1
+  sets the floor for every interactive element and a filter chip is not exempt.
+- **`Input` is `text-body-lg` (16px), never `text-body-md`.** Below 16px iOS Safari zooms the viewport on
+  focus, and on a `maximum-scale=1` PWA the user is then stuck at the wrong scale.
+- **`Avatar` uses a plain `<img>`**, with an inline eslint-disable naming the reason: Firebase photos come
+  from `lh3.googleusercontent.com`, and `next/image` would need that host in `images.remotePatterns` in
+  `next.config.ts` — a Lane A file. A 40px avatar gains nothing from the optimiser.
+- **`animate-sheet-up` was added to `globals.css`'s `@theme`** (B0's file, still Lane B's). Declared as a
+  theme animation so the reduced-motion block collapses it with everything else.
+- **`tokens.ts` is the one file where raw hex is correct.** It is the typed mirror of the `@theme` block
+  that BuildPlan `B0` requires; the no-raw-hex rule is about markup. Grepping for hex will always hit it.
+
 ## NOT VERIFIED
 _Per step: what was skipped, and where it is most likely wrong. This is the worklist BuildPlan §7.2
 inherits — see CLAUDE.md §10.2._
@@ -89,6 +125,22 @@ Most likely to be wrong, in order:
 4. **`src/app/favicon.ico` vs `metadata.icons`.** Next's file convention may take precedence over the
    config-based icon list; the manifest is unaffected either way, so this is cosmetic.
 
+**B1** — no `typecheck` / `lint` / `build`; nothing rendered. `node_modules` is still half-installed in
+this checkout (534 package dirs, but no `.bin` and no `typescript/lib`), so the toolchain could not run.
+The discipline greps **were** run and pass: no Tailwind breakpoint variants, no raw hex outside
+`tokens.ts`, no `any`, no `@ts-expect-error`.
+
+Most likely to be wrong, in order:
+1. **`@keyframes sheet-up` nested inside `@theme`.** If `animate-sheet-up` does nothing, Tailwind wanted
+   the keyframes at top level instead — move them out of the block; the `--animate-*` token stays.
+2. **`z-60` in `sheet.tsx`.** Relies on v4's bare numeric z-index. If the sheet renders under the app bar,
+   that is why; `z-[60]` is the fallback.
+3. **`Card`'s `as` prop.** A union of intrinsic element names assigned to a capitalised variable and used
+   as JSX — legal, but the least-exercised typing in the set.
+4. **`EmptyState`'s `cta` union** (`{label, href} | ReactNode`) and its `isCtaLink` guard.
+5. **`ChipRow`'s arbitrary variants** — `[scrollbar-width:none]` and `[&::-webkit-scrollbar]:hidden`.
+   Cosmetic if they fail; a visible scrollbar, nothing worse.
+
 ## DEPS ADDED
 _Packages this lane installed. The other lane must re-run `npm install` after pulling._
 
@@ -101,6 +153,12 @@ _Removals and upgrades only — additions each lane makes itself (BuildPlan §3)
 
 ## HANDOFF TO A
 _Defects found in Lane A files, and requests. Report, do not fix._
+
+0. **`A4`'s gate is OPEN** — `src/components/ui/button.tsx` exists as of `B1`. The create-auction form can
+   start now; it does not need to wait for `B2`. Available to it: `Button` / `ButtonLink`
+   (`variant`, `size="lg"` for the sticky footer, `loading`), `Input` (with `prefix="₹"` /
+   `suffix="Tons"`, `error` wired to `ActionResult`'s `field` key), `Textarea`, `Card`, `Chip` + `ChipRow`
+   for the duration selector, `Sheet` for the confirm, and `Icon` for any Material Symbol.
 
 1. **Shell API for `A3` / `A4` / `A5`.** `src/components/app-shell.tsx` now exports three things.
    `AppShell` stays in the root layout untouched; dashboard screens compose the other two themselves,
