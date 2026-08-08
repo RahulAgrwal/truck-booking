@@ -153,6 +153,29 @@ Also: the carrier feed's selected chip is `bg-primary`, but TechnicalDocument §
 `bg-primary-container` for a selected `Chip`, and B1 already shipped it that way. Kept `primary-container`
 — it is the explicit component contract, and the two Stitch screens are internally inconsistent here.
 
+## B0 fix — favicon.ico RGBA (`ecf29fb` handoff from Lane A)
+
+Lane A's Cloud Build died in `next build` on `src/app/favicon.ico`:
+*"Format error decoding Ico: The PNG is not in RGBA format!"* Their diagnosis was exact — B0's hand-rolled
+rasteriser emitted **colour type 2 (RGB)**, and Turbopack's ICO decoder accepts only **colour type 6
+(RGBA)**.
+
+Fixed at the encoder: it now writes 4 channels with a constant `0xFF` alpha. Applied to the standalone
+PNGs as well, not just the ICO entries — they decoded fine as RGB, but keeping two encodings in one
+rasteriser is how the next one of these happens. The mark is fully opaque so nothing changes visually, and
+zlib compresses the constant alpha channel to near nothing (favicon 825 → 867 bytes).
+
+Verified: all ten shipped PNGs — the four standalone icons and all three entries inside each of the two
+`.ico` files — now report `bitDepth=8 colorType=6`.
+
+**Not** verified by a clean `next build` in this checkout: `rm -rf .next` fails against Lane A's running
+dev server (`.next/dev/lock`, permission denied), and Lane A noted the failure only reproduces on a clean
+build. The fix is precisely what the diagnosis called for and is confirmed at the byte level; Cloud Build
+is the confirmation that counts.
+
+Worth recording as a process point: B0's local pass missed this because the ICO is only decoded during a
+**clean** build. `V4` in BuildPlan §7.2 should be run against a cleared `.next`, not an incremental one.
+
 ## VERIFICATION STATUS
 _Verification is deferred to BuildPlan §7 (CLAUDE.md §10). Where the toolchain happened to be usable,
 §10.3 says to run it — so some of this is now green rather than unknown._
