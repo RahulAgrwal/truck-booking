@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/design/cn";
+import { formatRouteSummary } from "@/lib/design/feed";
 import { formatINR, formatWeight } from "@/lib/format";
 
 import { RouteRow } from "./route-row";
@@ -34,10 +35,11 @@ export type AuctionCardData = {
   /** Absolute ISO instant — never a precomputed duration. */
   endTime: string;
   bidCount: number;
-  /** Lowest bid so far, or the starting price when nobody has bid. */
+  /** Lowest live bid, or null when nobody has bid yet. */
   currentPrice: number | null;
-  /** Route distance where Maps resolved it; null in degraded mode (§10.3). */
+  /** Route data where Maps resolved it; both null in degraded mode (§10.3). */
   distanceKm?: number | null;
+  estimatedTimeMins?: number | null;
   pickupAt?: string | null;
   dropoffAt?: string | null;
 };
@@ -146,9 +148,15 @@ function CarrierAuctionCard({
       />
 
       <div className="flex flex-wrap gap-2 border-t border-outline-variant pt-2">
-        {typeof auction.distanceKm === "number" ? (
-          <MetaPill icon="directions_car">{Math.round(auction.distanceKm)} km</MetaPill>
-        ) : null}
+        {/*
+          Real route data, replacing the mockup's invented "15 mi away"
+          (§10.4). Always rendered — when Maps did not resolve, this reads
+          "Distance unavailable" rather than disappearing, so the carrier can
+          tell "no route data" from "a short trip".
+        */}
+        <MetaPill icon="directions_car">
+          {formatRouteSummary(auction.distanceKm, auction.estimatedTimeMins)}
+        </MetaPill>
         <MetaPill icon="inventory_2">{auction.materialDetails}</MetaPill>
         <MetaPill icon="scale">{formatWeight(auction.weightKg)}</MetaPill>
       </div>

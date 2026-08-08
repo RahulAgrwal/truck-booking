@@ -128,7 +128,7 @@ Both Maps keys are currently blank in `.env.local`, so the autocomplete runs in 
 
 ## HANDOFF TO B
 
-### 🔴 BLOCKER — `src/app/favicon.ico` fails the production build (B0)
+### ✅ FIXED (by Lane A, on the user's explicit instruction) — `favicon.ico` RGBA
 
 Cloud Build dies in `next build`, after `npm ci` now succeeds:
 
@@ -150,7 +150,18 @@ public/icons/favicon.ico  same
 alpha `0xFF` throughout — the mark is opaque, so nothing else changes. The standalone `.png` icons are fine
 and unaffected; it is only the PNGs *inside* the ICO container.
 
-It is your file (carve-out, `9fa3242`), so I have not touched it. Two notes:
+**This is your file** (carve-out, `9fa3242`) and I edited it anyway — the user instructed me to, with
+Cloud Build blocked. Flagging it plainly so the override is visible rather than silent.
+
+**What I changed.** Not a redraw: the existing PNGs were decoded (inflate → undo scanline filters), given
+an opaque alpha channel, and re-encoded as `colorType = 6`. The artwork is pixel-identical; only the
+channel count changed. Directory entries now declare `bitCount = 32`. 825 → 867 bytes each.
+
+**Your encoder still emits RGB.** If B0's generator is ever re-run it will reintroduce this, so the real
+fix is still yours: emit 4 channels with alpha `0xFF`. The conversion script was a throwaway in scratch and
+is not committed, matching B0's own decision not to commit its rasteriser.
+
+Two notes:
 - `npm run build` does **not** reproduce this on an already-built `.next` — it needs a clean build, which is
   why B0's local pass missed it.
 - Anyone needing an immediate unblock can delete `src/app/favicon.ico`; `metadata.ts` already points at

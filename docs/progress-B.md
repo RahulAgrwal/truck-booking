@@ -15,7 +15,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B0 | `[x]` | Design tokens, global styles, PWA shell | `package.json` | `7690c9e` | B1 gate is OPEN (`@theme` present) |
 | B1 | `[x]` | UI primitives | `@theme` in `globals.css` | `c9e599d` | **A4's gate is OPEN** — `ui/button.tsx` exists |
 | B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
-| B3 | `[~]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · started 2026-08-09 |
+| B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
 | B4 | `[ ]` | Place a bid | `schemas.ts` | | gate already satisfied by A1 · Stitch `69e048b5…` + `16fc1711…` |
 | B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
 | B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
@@ -153,6 +153,48 @@ Also: the carrier feed's selected chip is `bg-primary`, but TechnicalDocument §
 `bg-primary-container` for a selected `Chip`, and B1 already shipped it that way. Kept `primary-container`
 — it is the explicit component contract, and the two Stitch screens are internally inconsistent here.
 
+## B3 notes
+
+`/carrier` + `loading.tsx` + `error.tsx` + `feed-filters.tsx`, from Stitch `36d28947…`. Query is §5.6's:
+`status: ACTIVE` **and** `endTime > now`, ordered by `endTime` ascending so the loads a carrier can still
+act on come first.
+
+**Filter state lives in the URL, not in `useState`** — this is the load-bearing decision on this screen.
+`PollingRefresher` fires `router.refresh()` every 7s; a filter held in component state would be re-rendered
+against a server payload built for the *unfiltered* feed, and the chips and the list would silently drift
+apart. `searchParams` is part of the request, so it survives every refresh. `router.replace` rather than
+`push`, so twelve keystrokes are not twelve history entries.
+
+**`parseFeedFilter` refuses `?filter=nearby`.** The chip is disabled in the UI, and a hand-typed URL must
+not be a way around a filter we have not implemented — unknown and disabled values both fall back to `all`.
+Untrusted input, treated as such (CLAUDE.md §3.2).
+
+**Nearby stays dead, and visibly so.** Rendered disabled with a "Soon" badge rather than hidden, because
+`distanceKm` is the length of the auction's own route, not the carrier's distance from the pickup — we
+store no carrier location at all (§10.4). Repurposing it would show a confident "15 km away" that is simply
+false. An absent chip hides the gap; a disabled one is honest about it.
+
+**Route data replaces the mockup's invented "15 mi away"**: `formatRouteSummary` renders "148 km · ~3h 15m",
+degrades to "148 km" when only distance resolved, and to "Distance unavailable" when neither did. All six
+route fields are nullable, so this is the one place that can produce `undefined km` — and it does not. The
+pill always renders, so a carrier can tell "no route data" from "a short trip".
+
+**The search box is real.** It filters pickup, dropoff and material, case-insensitively, debounced 300ms
+into the same URL state as the chips.
+
+### Deliberate departures
+
+- **The `tune` filter button is omitted.** The BuildPlan text and the mockup both include it, but every
+  filter it could open is already one tap away in the chip row directly beneath it, and no filter sheet was
+  ever designed. A second control that duplicates the visible one is worse product than no control, and a
+  button that opens a sheet showing the same four chips is worse still. If filters later outgrow the row
+  (sort order, weight ranges, date windows), `tune` is where they go — `Sheet` from B1 is ready for it.
+- **Two different empty states.** "No loads available right now" is what BuildPlan specifies, but it is a
+  lie when the feed is empty *because of a filter* — so a filtered miss gets "No loads match those
+  filters" with a one-tap route back to `/carrier`. A dead end here would look like a broken feed.
+- Chrome is drawn for real in `loading.tsx` rather than skeletoned: the app bar and nav are identical on
+  both sides of the load, so a placeholder would only make them flicker.
+
 ## B0 fix — favicon.ico RGBA (`ecf29fb` handoff from Lane A)
 
 Lane A's Cloud Build died in `next build` on `src/app/favicon.ico`:
@@ -180,13 +222,17 @@ Worth recording as a process point: B0's local pass missed this because the ICO 
 _Verification is deferred to BuildPlan §7 (CLAUDE.md §10). Where the toolchain happened to be usable,
 §10.3 says to run it — so some of this is now green rather than unknown._
 
-**Ran clean over B0 + B1 + B2** once the other lane's `npm install` finished:
+**Ran clean over B0 + B1 + B2 + B3** once the other lane's `npm install` finished:
 
 - `npm run typecheck` — **passes** (found and fixed one real defect: `NAV_ITEMS[role][0]` is
   `NavItem | undefined` under `noUncheckedIndexedAccess`)
 - `npm run lint` — **passes**, exit 0
-- `npm run test` — **18 passed**, 2 files (Lane A's 11 formatter tests + B2's 7 nav tests)
+- `npm run test` — **34 passed**, 3 files (Lane A's 11 formatter tests + B2's 7 nav tests +
+  B3's 16 feed tests)
 - discipline greps — no breakpoint variants, no raw hex outside `tokens.ts`, no `any`
+
+Still **not** run: `npm run build` (needs a clean `.next`, which the other lane's dev server holds open in
+this shared checkout) and anything rendered.
 
 ## NOT VERIFIED
 _What is still outstanding for BuildPlan §7.2 — see CLAUDE.md §10.2._
@@ -226,6 +272,21 @@ built against these tokens) and see whether it is styled at all.
     failure to watch for. Seeded auction 3 ends in ~4 minutes, per §8.2.
 11. **`PollingRefresher` pausing on a hidden tab.** Verify in the Network panel: no requests while
     backgrounded, one immediately on return.
+
+**B3, needs the feed rendered against seed data:**
+
+12. **Filters surviving a poll.** The whole reason filter state is in the URL. Select "High Weight", wait
+    out two 7s refreshes, confirm the chip stays selected and the list stays filtered.
+13. **Search debounce vs. `router.refresh()`.** `FeedFilters` keeps a local `draft` and a `dirty` ref to
+    tell "the user typed" from "the server sent a new value". A refresh mid-typing must not clobber the
+    box. Type slowly across a poll boundary and watch for characters vanishing.
+14. **`mode: "insensitive"`** on the three `contains` clauses — Postgres-only in Prisma, and untested here.
+    Symptom: searching "mumbai" finds nothing while "Mumbai" works.
+15. **Chip row scrolling without the page scrolling** — accept criterion. The `-mx-margin-mobile` bleed
+    plus `overflow-x-auto` from `ChipRow`.
+16. **Which seed rows appear.** carrier1 should see auctions 1, 2 and 3 (ACTIVE, future `endTime`), and
+    *not* 4 (CLOSED_EXPIRED) or 5 (COMPLETED_ASSIGNED). Auction 3 ends ~4 min out, so its timer should
+    already be red.
 
 ## DEPS ADDED
 _Packages this lane installed. The other lane must re-run `npm install` after pulling._
