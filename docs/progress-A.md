@@ -14,7 +14,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [x] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | by Claude 2 — see note below · **A6 gate open** |
 | A6 | [x] | Accept-bid transaction + cron | A5 | | |
-| A7 | [ ] | Shipper history + deploy docs | A6 | | |
+| A7 | [~] | Shipper history + deploy docs | A6 | | |
 
 Out-of-band: `c6fd860` — pinned npm 11 in the Docker deps stage (Cloud Build `npm ci` fix).
 
