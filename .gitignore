@@ -1,0 +1,9 @@
+# Per-checkout lane assignment — never commit (see docs/LANE.md.example)
+docs/LANE.md
+
+# Secrets
+.env
+.env.local
+.env*.local
+
+# A0 extends this file with the standard Next.js / Node ignores.

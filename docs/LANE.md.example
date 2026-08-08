@@ -1,0 +1,20 @@
+# Lane assignment for THIS checkout
+
+Copy this file to `docs/LANE.md` and set the value — or let the agent write it for you, which is what
+normally happens: on session start it asks "Which Claude am I?" and records the answer here.
+
+`docs/LANE.md` is **gitignored**. It is per-checkout state, not shared state — each of the two working
+copies holds its own value. Committing it would make the two lanes fight over one line.
+
+```
+LANE: A
+```
+
+| Value | You are | You build | Steps |
+|---|---|---|---|
+| `LANE: A` | **Claude 1** | Foundation, auth, Shipper vertical, cron, deploy | `A0`–`A7` |
+| `LANE: B` | **Claude 2** | Design system, shared components, Carrier vertical | `B0`–`B6` |
+
+If this file is missing, empty, or ambiguous — **ask the user**. Never infer your lane from the working
+directory, the git log, or which files happen to exist. Two instances that both assume Lane A will
+overwrite each other on `main`.
