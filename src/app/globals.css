@@ -145,6 +145,17 @@
       transform: translateY(0);
     }
   }
+
+  /*
+    B4: the success screen's tick draws itself. Stroke-dash animation, so the
+    reduced-motion block collapses it to an instantly-complete mark rather than
+    leaving half a tick on screen.
+  */
+  @keyframes draw-mark {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
 }
 
 /*

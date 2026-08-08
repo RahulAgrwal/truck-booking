@@ -16,7 +16,7 @@ Status markers — **`[~]` goes in before the work starts and is pushed on its o
 | B1 | `[x]` | UI primitives | `@theme` in `globals.css` | `c9e599d` | **A4's gate is OPEN** — `ui/button.tsx` exists |
 | B2 | `[x]` | Shared components | B1 | | **A3 + A5 gates are OPEN** — `auction-card` · `mobile-nav` · `timer` · `bid-card` |
 | B3 | `[x]` | Carrier load feed | `session.ts` + `schema.prisma` | | Stitch `36d28947…` · filters in the URL |
-| B4 | `[~]` | Place a bid | `schemas.ts` | | gate already satisfied by A1 · Stitch `69e048b5…` + `16fc1711…` |
+| B4 | `[x]` | Place a bid | `schemas.ts` | | Stitch `69e048b5…` + `16fc1711…` · all six §5.3 guards |
 | B5 | `[ ]` | My Bids | B4 | | hand-built → start at Mobbin |
 | B6 | `[ ]` | Profile, state coverage, a11y pass | B5 | | hand-built → start at Mobbin |
 
@@ -195,6 +195,40 @@ into the same URL state as the chips.
 - Chrome is drawn for real in `loading.tsx` rather than skeletoned: the app bar and nav are identical on
   both sides of the load, so a placeholder would only make them flicker.
 
+## B4 notes
+
+`/carrier/auction/[id]` + `loading` + `error` + `bid-form` + `bid-success`, and `src/lib/actions/bid.ts`.
+Stitch `69e048b5…` and `16fc1711…`.
+
+**All six §5.3 guards are server-side, and the client duplicates none of them for safety** — only for speed
+of feedback. Guard 4 (`endTime > now`) is the one that matters most: the status column lags by up to 60s
+until cron sweeps it, so re-checking the deadline on write is what makes that lag harmless. Guard 6 is
+"undercut **your own** previous bid", not the global minimum — another carrier being cheaper is the auction
+working, not a reason to refuse.
+
+**The confirm step is a bottom `Sheet`, and the write happens after it** (§7.6). Success replaces the form
+in place rather than firing a toast: §7.6 says a screen that commits something irreversible shows a success
+*screen*. Rendering it in component state rather than routing to `?submitted=` keeps a completed write off
+the URL, where a refresh or a shared link could imply it happened again.
+
+A server rejection closes the sheet before showing its message, so the error lands against the form it
+belongs to rather than behind a dismissed overlay.
+
+### Deliberate departures
+
+| Mockup | Shipped | Why |
+|---|---|---|
+| Submit button `bg-[#0A192F]` | `bg-primary-container` | Raw hex, and that navy is superseded PRD palette |
+| Success SVG's three PRD hexes | `currentColor` + `text-tertiary` | Same rule; the confetti existed only to carry those colours, so it is gone |
+| "Hot Load" badge | "Open for bids" / "Closed" | The mockup's label is unearned — nothing computes heat. This says something true and doubles as the closed state |
+| `42,000 lbs` · `920 mi` | `formatWeight` · `formatRouteSummary` | INR/metric (§6), and the route line is required content here (§10.4) |
+| Timer `02:14:59` | §7.3 format | Lane A's tested formatter is the one source |
+| `#LD-8492` load ID on success | dropped | We have no such identifier; a UUID would be noise |
+
+**`error.tsx` never says the bid failed.** It catches render-time failures on the page; `submitBid`'s
+rejections come back through `ActionResult` as inline messages and never reach the boundary. Telling
+someone their bid failed when it may have been written would be worse than saying nothing.
+
 ## B0 fix — favicon.ico RGBA (`ecf29fb` handoff from Lane A)
 
 Lane A's Cloud Build died in `next build` on `src/app/favicon.ico`:
@@ -287,6 +321,21 @@ built against these tokens) and see whether it is styled at all.
 16. **Which seed rows appear.** carrier1 should see auctions 1, 2 and 3 (ACTIVE, future `endTime`), and
     *not* 4 (CLOSED_EXPIRED) or 5 (COMPLETED_ASSIGNED). Auction 3 ends ~4 min out, so its timer should
     already be red.
+
+**B4 — the guards need adversarial testing, which is the whole point of them:**
+
+17. **Guard 4 with the UI forced open.** Load the bid screen on seeded auction 3, wait past its ~4-minute
+    deadline *without* letting the page refresh, then submit. Must be rejected server-side. This is the
+    single most important check in the step — everything else is UX.
+18. **Guard 6.** Bid twice: the second must be strictly lower or come back with an inline message naming
+    the current bid.
+19. **Guard 1 / 5.** A SHIPPER session calling `submitBid` must be refused; `requireRole("CARRIER")` on the
+    page only hides the form.
+20. **The shipper sees it within ~7s** — the `revalidatePath` set crossing to Lane A's A5 screen.
+21. **CTA reachable with the numeric keypad open at 390×844** — accept criterion, and the reason the footer
+    is sticky. Worth checking on a real iOS device rather than DevTools, which fakes keyboard inset.
+22. **`animate-[draw-mark_…]`** on the success tick — an arbitrary animation name plus a `@keyframes` in
+    `@theme`. If the tick appears fully drawn with no animation, that pairing is why. Cosmetic.
 
 ## DEPS ADDED
 _Packages this lane installed. The other lane must re-run `npm install` after pulling._
