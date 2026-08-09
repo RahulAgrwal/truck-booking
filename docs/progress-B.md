@@ -639,7 +639,7 @@ by what would hurt most if wrong:
 | Step | Status | Title | Commit | Notes |
 |------|--------|-------|--------|-------|
 | B1 | `[x]` | Schema + migration | `7a00aa1`+ | migration applied to Neon · **`B2` `B5` `B6` `B7` gates OPEN** |
-| B2 | `[ ]` | Contracts + typed stubs | | |
+| B2 | `[x]` | Contracts + typed stubs | | **`A2` `A3` `A4` gates OPEN** · typecheck+lint+74 tests green |
 | B3 | `[ ]` | Visibility rule | | |
 | B4 | `[ ]` | Actions | | |
 | B5 | `[ ]` | Session gate | | |
@@ -673,3 +673,57 @@ first step that can meaningfully typecheck). Most likely to be wrong: nothing in
 cleanly and is additive — but the `Review` relation names (`ReviewsWritten` / `ReviewsReceived`) are the
 kind of thing a later `include` gets wrong silently, and the `RESTRICT` seed hazard above is a real,
 already-known break waiting for `B7`.
+
+*Retired by `B2`:* `npm run typecheck` and `npm run lint` pass against the regenerated client, so the
+relation names and the new columns are confirmed to exist and to be spelled as §4 says.
+
+## B2 notes — contracts, and the four Lane A gates it opens
+
+The unblocking commit. Signatures everywhere Lane A needs them; behaviour only where behaviour was free.
+`A2`, `A3` and `A4` can all start now.
+
+### Where each thing actually lives, and why it is not always where §4 said
+
+- **`ratingAverage` / `formatRating` are defined in `format.ts`, re-exported from `reviews.ts`.**
+  §4 puts them in `reviews.ts`, but `reviews.ts` has to be `server-only` — it holds the Prisma reads —
+  and Lane A's rating components are `"use client"` (they render inside the accept-bid sheet). Defining
+  them in the pure formatters module and re-exporting satisfies the written contract from either import
+  path, with one implementation. A duplicated copy would have been the alternative, and the half-star
+  boundary is exactly the kind of thing that then drifts.
+- **`dealWhere` and `canExchangeContact` are real already, not fail-closed stubs.** `getDeal` is the only
+  one of the three Lane A ever calls, so stubbing the other two would have changed nothing for them while
+  costing a placeholder that then has to be deleted. `getDeal` still returns `null` — the fail-closed
+  default — so the intermediate state cannot leak. `B3` is therefore "`getDeal` + the tests that prove all
+  three agree", which is the substance of that step anyway.
+- **`updateContactDetails` is stubbed in `actions/user.ts`**, which §3's file list for `B2` omits but §4's
+  contract requires. `A2` builds its form against that signature.
+
+### Contract additions Lane A must know about
+
+Written into §4 of the board as well, because §4 is where they will look:
+
+- **`TRUCK_TYPES` is a closed list and `truckType` is a `z.enum`.** Free text would make the field
+  worthless the first time someone types "cntnr" — a shipper reads it as a fact about the vehicle they
+  hired. Six values, extend the array rather than loosening the schema, and the field wants a `ChipRow`.
+- **Normalisation happens inside the schema, before validation.** `ContactDetailsSchema` pipes phone
+  through `normalizePhone` and truck number through `normalizeTruckNumber`, so `"+91 98765 43210"` and
+  `"9876543210"` are one input and the column always holds the canonical form. The form must not
+  re-implement `PHONE_RE` / `TRUCK_NUMBER_RE`; it should surface `ActionResult.field`.
+
+### Two decisions inside the schema worth stating
+
+**`stars` has no DB `CHECK`** (see `B1`), so `SubmitReviewSchema` and `submitReview` are the only bound on
+1–5. `z.coerce.number()` because the value arrives from a `FormData` star input as a string.
+
+**`ContactDetailsSchema` is discriminated on `role`, but the *client picks the shape, never the identity*.**
+`B4` checks the branch against `session.role` and refuses a mismatch. The discriminator is there so the
+server never has to guess which set of fields it is looking at — it is not, and must not become, the thing
+that decides what the user is.
+
+**NOT VERIFIED (B2):** `typecheck`, `lint` and `test` (74, 7 files) all pass, and the §6 greps are clean —
+`phone` / `truckNumber` / `companyName` appear in `src/app` and `src/components` only inside three
+unrelated prose comments. No `build`, nothing rendered, and **no test yet covers the new code**: the
+formatters and the zod pipeline are untested until `B3`/`B6` add their files. Most likely to be wrong:
+`normalizePhone`'s leading-`0` and leading-`91` stripping (an 11-digit number starting `0` and a 12-digit
+one starting `91` are the two branches, and a `+910…` input hits neither), and `TRUCK_NUMBER_RE` against
+the newer BH-series and older three-letter-district plates, which it will reject.

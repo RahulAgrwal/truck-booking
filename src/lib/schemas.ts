@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizePhone, normalizeTruckNumber } from "@/lib/format";
+
 /**
  * Every zod schema in the app, in one place so both lanes import the same
  * definitions. Lane A owns this file; Lane B consumes SubmitBidSchema in B4.
@@ -79,6 +81,102 @@ export const SubmitBidSchema = z.object({
 });
 
 export type SubmitBidInput = z.infer<typeof SubmitBidSchema>;
+
+/* ------------------------------------------------------------------ *
+ * Contact details + reviews (docs/feature-contact-ratings.md §4).
+ * ------------------------------------------------------------------ */
+
+/** Indian mobile: ten bare digits starting 6–9. Tested against the *normalised* value. */
+export const PHONE_RE = /^[6-9]\d{9}$/;
+
+/** Indian commercial plate, e.g. MH12AB1234. Tolerates the spaced form too. */
+export const TRUCK_NUMBER_RE = /^[A-Z]{2}\s?\d{1,2}\s?[A-Z]{0,3}\s?\d{4}$/;
+
+/**
+ * Body types offered on the carrier details form.
+ *
+ * A closed list rather than free text: `truckType` is shown to a shipper as a
+ * fact about the vehicle they hired, so "Container", "container" and "cntnr"
+ * being three different answers would make it worthless — and a chip row is
+ * the design system's answer to a short enumeration anyway. Extend the list
+ * rather than loosening the schema.
+ */
+export const TRUCK_TYPES = [
+  "Open Body",
+  "Container",
+  "Trailer",
+  "Tipper",
+  "Tanker",
+  "Refrigerated",
+] as const;
+
+export type TruckType = (typeof TRUCK_TYPES)[number];
+
+/**
+ * Phone is normalised *before* it is validated, so "+91 98765 43210" and
+ * "09876543210" are the same input as far as the rule is concerned, and what
+ * lands in the database is always the canonical ten digits.
+ */
+const phoneField = z
+  .string()
+  .trim()
+  .min(1, "Enter your mobile number.")
+  .transform(normalizePhone)
+  .refine((value) => PHONE_RE.test(value), "Enter a valid 10-digit Indian mobile number.");
+
+const addressField = z
+  .string()
+  .trim()
+  .min(5, "Enter your address.")
+  .max(200, "Address must be 200 characters or fewer.");
+
+const truckNumberField = z
+  .string()
+  .trim()
+  .min(1, "Enter your truck number.")
+  .transform(normalizeTruckNumber)
+  .refine((value) => TRUCK_NUMBER_RE.test(value), "Enter a valid truck number, e.g. MH12AB1234.");
+
+export const ShipperDetailsSchema = z.object({
+  role: z.literal("SHIPPER"),
+  phone: phoneField,
+  address: addressField,
+  companyName: z
+    .string()
+    .trim()
+    .min(2, "Enter your company name.")
+    .max(120, "Company name must be 120 characters or fewer."),
+});
+
+export const CarrierDetailsSchema = z.object({
+  role: z.literal("CARRIER"),
+  phone: phoneField,
+  address: addressField,
+  truckNumber: truckNumberField,
+  truckType: z.enum(TRUCK_TYPES, { message: "Choose a truck type." }),
+});
+
+/**
+ * Discriminated, not optional-everything: a carrier cannot submit a shipper
+ * payload, and the action never has to guess which branch it is looking at.
+ * The action still checks the branch against the *session* role — the client
+ * chooses the shape, never the identity (CLAUDE.md §3.2).
+ */
+export const ContactDetailsSchema = z.discriminatedUnion("role", [
+  ShipperDetailsSchema,
+  CarrierDetailsSchema,
+]);
+
+export type ContactDetailsInput = z.infer<typeof ContactDetailsSchema>;
+
+/** Rate the other party on a completed job. One review per party per job. */
+export const SubmitReviewSchema = z.object({
+  auctionId: z.string().uuid(),
+  stars: z.coerce.number().int().min(1, "Choose a rating.").max(5),
+  comment: z.string().trim().max(400, "Keep your review to 400 characters.").optional(),
+});
+
+export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
 
 /** First zod issue as a flat `{ error, field }`, ready to return from an action. */
 export function firstIssue(error: z.ZodError): { error: string; field?: string } {

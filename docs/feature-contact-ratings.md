@@ -99,7 +99,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | Step | Status | Title | Gate | Files | Notes |
 |---|---|---|---|---|---|
 | `B1` | `[x]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | applied to Neon · ⚠ `Review` FKs are `RESTRICT`, so `B7`'s seed must delete reviews first |
-| `B2` | `[ ]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/review.ts` | **unblocks 4 Lane A steps — push the moment it compiles** |
+| `B2` | `[x]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/{user,review}.ts` | **`A2` `A3` `A4` gates are OPEN** · typecheck+lint+74 tests green · see the three notes at the end of §4 |
 | `B3` | `[ ]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | opens `A4` |
 | `B4` | `[ ]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
 | `B5` | `[ ]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
@@ -329,6 +329,30 @@ allows a later step whose gate is open.
 > rendering of it, and putting the rounding in the read model would have meant two copies of the
 > half-star boundary to keep in sync. `ratingAverage`, `formatRating`, `raterSelect` and `reviewsFor` are
 > unchanged; `B6` is one function lighter.
+
+### `B2` shipped — three notes on the contract, Lane A please read
+
+Everything in §4 above is implemented as written. Three things it did not say:
+
+1. **`TRUCK_TYPES` is a closed list, and `truckType` is a `z.enum`, not free text.**
+   `src/lib/schemas.ts` exports `TRUCK_TYPES` (`"Open Body" · "Container" · "Trailer" · "Tipper" ·
+   "Tanker" · "Refrigerated"`) and the type `TruckType`. Build that field as a `ChipRow`, not an `Input` —
+   the value is shown to a shipper as a fact about the vehicle they hired, so three spellings of
+   "container" would make it worthless. Extend the array if a type is missing; don't loosen the schema.
+
+2. **`ratingAverage` and `formatRating` are *defined* in `@/lib/format`** and only re-exported from
+   `@/lib/reviews`. `reviews.ts` is `server-only` (it holds the Prisma reads), so importing it from a
+   `"use client"` file is a build error — import those two from `@/lib/format` instead. Same functions,
+   both paths, §4's contract holds either way.
+
+3. **Phone and truck number normalise inside the schema.** `ContactDetailsSchema` runs
+   `normalizePhone` / `normalizeTruckNumber` *before* validating, so `"+91 98765 43210"`,
+   `"098765-43210"` and `"9876543210"` are all the same input and the database always holds the canonical
+   form. The form need not pre-clean anything, and it should **not** re-implement the regexes — surface
+   `ActionResult.field` errors instead.
+
+Also available and probably wanted, all pure and client-safe in `@/lib/format`: `formatPhone` →
+`+91 98765 43210`, `telHref` → `tel:+91…`, `formatTruckNumber` → `MH 12 AB 1234`.
 
 ---
 

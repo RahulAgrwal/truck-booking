@@ -91,6 +91,19 @@ export async function setUserRole(input: unknown): Promise<ActionResult<{ next: 
   return { ok: true, data: { next: homePathFor(user.role) } };
 }
 
+/**
+ * Save the contact details collected at onboarding step 2, and later editable
+ * at `/profile/details` (docs/feature-contact-ratings.md §4).
+ *
+ * STUB — `B4` implements it. `A2` builds its form against this signature; the
+ * `next` it will return is where the user goes once details are complete,
+ * which is their dashboard, not back to the form.
+ */
+export async function updateContactDetails(input: unknown): Promise<ActionResult<{ next: string }>> {
+  void input;
+  return { ok: false, error: "Not available yet." };
+}
+
 /** Clear the cookie and revoke refresh tokens, so the session dies everywhere. */
 export async function signOut(): Promise<void> {
   const session = await getSession();
