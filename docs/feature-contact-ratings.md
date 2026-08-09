@@ -117,7 +117,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | Step | Status | Title | Gate | Files | Notes |
 |---|---|---|---|---|---|
 | `A0` | `[x]` | This board | — | `docs/feature-contact-ratings.md` | |
-| `A1` | `[~]` | `RatingStars` + `CarrierReputation` primitives | — *(prop-driven, see §4)* | `src/components/{rating-stars,carrier-reputation}.tsx` | claimed, building now |
+| `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
 | `A2` | `[ ]` | Details form + onboarding step 2 + `/profile/details` | `B2` | `(auth)/onboarding/details/**`, `role-cards.tsx`, `(dashboard)/profile/details/**` | |
 | `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[ ]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | also fixes the `sheet.tsx` scroll-lock bug (§5) |
@@ -221,7 +221,6 @@ inside `src/app/`**.
 ```ts
 export function ratingAverage(sum: number, count: number): number | null;  // null at zero reviews
 export function formatRating(sum: number, count: number): string;          // "4.8 (12)" | "No ratings yet"
-export function starBreakdown(average: number | null): ("full" | "half" | "empty")[];  // length 5
 
 export const raterSelect;   // { id, name, profileImage, ratingSum, ratingCount }
 
@@ -285,13 +284,21 @@ transacted with.
 > **⚠ Loop hazard — the one seam both lanes must read.** `/onboarding/details` (Lane A) must call
 > `requireSession()`, **never** `requireRole()`, or `B5`'s guard redirects the page to itself forever.
 
-### Note on `A1`'s gate
+### Note on `A1`'s gate — and one contract change out of it
 
-`RatingStars` and `CarrierReputation` are written **prop-driven** — they take
+`RatingStars`, `StarRatingInput` and `CarrierReputation` are written **prop-driven** — they take
 `{ average: number | null; count: number }` and never import from `src/lib/reviews.ts`. A presentational
-component should not depend on a server read model, and the side effect is that `A1`'s gate is satisfied
-before `B2` lands. Lane A takes it early; `BuildPlan.md` §1 explicitly allows a later step whose gate is
-open.
+component should not depend on a server read model, and it *cannot* depend on one here: `RatingStars` and
+`CarrierReputation` are rendered inside the accept-bid sheet, which is `"use client"`. The side effect is
+that `A1`'s gate was satisfied before `B2` landed, so Lane A took it early — `BuildPlan.md` §1 explicitly
+allows a later step whose gate is open.
+
+> **⚠ Contract change, Lane B please note: `starBreakdown` is gone from `reviews.ts`.**
+> It now lives in `src/components/rating-stars.tsx` and is exported from there. How many pixels of star
+> to paint is presentation, not a fact about the data — `4.8` is the fact, "five filled stars" is one
+> rendering of it, and putting the rounding in the read model would have meant two copies of the
+> half-star boundary to keep in sync. `ratingAverage`, `formatRating`, `raterSelect` and `reviewsFor` are
+> unchanged; `B6` is one function lighter.
 
 ---
 
