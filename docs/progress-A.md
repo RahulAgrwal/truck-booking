@@ -309,3 +309,42 @@ not green now — re-run everything rather than trusting an earlier pass.
 whether the assigned row finds its accepted bid and shows the right ₹; (2) `docs/deploy.md`'s rollback and
 rotate commands, written from the config rather than executed; (3) the `history` variant at 390×844, where
 a long material name and a ₹ amount share one row.
+
+## VERIFICATION PASS (BuildPlan §7.2) — run by Lane A against `main`
+
+| Step | Result |
+|---|---|
+| `V1` typecheck | ✅ zero errors |
+| `V2` lint | ✅ zero errors (Lane B cleared the two it owned) |
+| `V3` test | ✅ **74 passed / 7 files** |
+| `V4` build | ✅ all 12 routes compile |
+| `V6` greps | ✅ see exceptions below |
+| `V8` route sweep | ✅ see below |
+| `V5` 390×844 · `V7` PWA install · `V9` a11y | ⏳ not run — need a real device/browser |
+
+**V6 accepted exceptions** (both deliberate, neither a token violation):
+- `google-button.tsx` — `#4285F4 / #34A853 / #FBBC05 / #EA4335` are Google's brand colours in the "G"
+  mark. They must be exact and cannot be tokens.
+- `global-error.tsx` (Lane B) — raw hex is unavoidable: that boundary renders when the CSS itself may have
+  failed, so it cannot depend on Tailwind.
+- `#ff6b00` in `globals.css` / `tokens.ts` is **not** a PRD leak — it is `primary-container` from the Stitch
+  token set (CLAUDE.md §4.1). Only `#0F172A / #F8FAFC / #020617 / #10B981 / #EF4444` would be, and none appear.
+
+**V8 route sweep** — shipper: `/shipper`, `/shipper/create`, `/shipper/history`, `/shipper/auction/[id]`
+all 200. Carrier: `/carrier`, `/carrier/bids`, `/profile` all 200. `/api/cron` without a bearer → **401**.
+Cross-role guard verified: a CARRIER hitting `/shipper` gets `NEXT_REDIRECT;replace;/carrier;307` in the
+stream, and an `RSC: 1` request returns a real **307**.
+
+> **Trap worth recording.** `curl /shipper` as a carrier returns **200**, which looks like the guard has
+> failed. It has not — a route with `loading.tsx` streams its shell with a 200 before the redirect
+> resolves, so what curl captures is the skeleton. Verify guards with an `RSC: 1` header, or you will chase
+> a bug that is not there. I did.
+
+**Stale seed data.** The seeded auctions were created with relative end times and have all now expired, so
+`/carrier` correctly shows its empty state. Re-run `npm run db:seed` before any UI pass — an empty feed is
+the data's age, not a defect.
+
+## v1 status
+Both lanes code-complete. Deferred backlog: Nearby/geo filtering (needs carrier location, not route
+distance), notifications, service worker, dark-mode verification, ratings — plus `V5`/`V7`/`V9`, which
+need a real device, and the entire Google Maps path, which needs API keys.

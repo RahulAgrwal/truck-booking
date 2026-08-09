@@ -16,30 +16,38 @@ export default async function LoginPage() {
   if (session) redirect(homePathFor(session.role));
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-margin-mobile w-full min-h-screen pt-safe">
-      <div className="mb-stack-lg mt-auto flex flex-col items-center">
-        <TruckMark />
-      </div>
+    <main className="flex min-h-dvh w-full flex-col items-center px-margin-mobile pt-safe">
+      {/*
+        One centred group — mark, tagline, button and terms travel together.
 
-      <div className="text-center mb-12">
-        <h1 className="font-headline-lg text-headline-lg text-on-surface">
+        The previous version had `mt-auto` on both the mark and the button,
+        which pushed them to opposite ends of the viewport and stranded the
+        button at the very bottom, far from the text it belongs to. A single
+        `flex-1 justify-center` block keeps the whole call-to-action as one
+        readable unit, which also stops it drifting on taller phones.
+      */}
+      <div className="flex w-full flex-1 flex-col items-center justify-center gap-stack-lg">
+        <TruckMark />
+
+        <h1 className="text-center font-headline-lg text-headline-lg text-on-surface">
           Find loads. Book trucks. Instantly.
         </h1>
+
+        <div className="flex w-full flex-col gap-stack-md">
+          <GoogleButton />
+
+          <p className="text-center font-label-bold text-label-bold text-secondary">
+            By logging in, you agree to our{" "}
+            <a className="text-primary underline" href="/terms">
+              Terms of Service
+            </a>
+            .
+          </p>
+        </div>
       </div>
 
-      <div className="w-full flex flex-col gap-stack-md mt-auto mb-stack-lg">
-        <GoogleButton />
-      </div>
-
-      <div className="pb-safe w-full text-center mb-6">
-        <p className="font-label-bold text-label-bold text-secondary">
-          By logging in, you agree to our{" "}
-          <a className="text-primary underline" href="/terms">
-            Terms of Service
-          </a>
-          .
-        </p>
-      </div>
+      {/* Breathing room above the home indicator, without pinning content to it. */}
+      <div className="pb-safe h-stack-lg shrink-0" aria-hidden="true" />
     </main>
   );
 }
