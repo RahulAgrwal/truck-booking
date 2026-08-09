@@ -33,19 +33,18 @@ touched by this feature and keep their existing owner.
 - **`npm run db:seed` truncates the shared Neon database.** Lane B owns seeding, runs it once,
   deliberately, and says so in `docs/progress-B.md` first.
 
-### ⚠ Off limits right now — Claude 2 has three frontend files open
+### ✅ RESOLVED — the three frontend files Claude 2 had open
 
-Uncommitted in this checkout at the time of writing: a "Bid placed / New" per-viewer badge across
+At the time this board was written, Claude 2 had uncommitted edits to `src/components/auction-card.tsx`
+and `src/app/(dashboard)/carrier/{page,loading}.tsx` (the "Bid placed / New" per-viewer badge). Under the
+new split those are Lane A files, so Lane A held off — editing a file another agent has open destroys
+their work.
 
-```
-src/components/auction-card.tsx
-src/app/(dashboard)/carrier/page.tsx
-src/app/(dashboard)/carrier/loading.tsx
-```
+**They landed in `68a4130` and have transferred to Lane A.** No file is off limits now. The
+shipper-rating-on-the-feed-card follow-up is unblocked (§7).
 
-Under the new split these are Lane A files, but **Lane A must not touch them until Claude 2 commits**.
-Editing a file another agent has open destroys their work. They transfer to Lane A on that commit.
-Consequence: the shipper-rating-on-the-feed-card idea is deferred (§5).
+The general rule stands whenever this happens again: *if the other lane has it dirty, it is theirs until
+they commit.* `git status` before you edit anything near the boundary.
 
 ---
 
@@ -99,7 +98,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 
 | Step | Status | Title | Gate | Files | Notes |
 |---|---|---|---|---|---|
-| `B1` | `[~]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | claimed, building now |
+| `B1` | `[x]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | applied to Neon · ⚠ `Review` FKs are `RESTRICT`, so `B7`'s seed must delete reviews first |
 | `B2` | `[ ]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/review.ts` | **unblocks 4 Lane A steps — push the moment it compiles** |
 | `B3` | `[ ]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | opens `A4` |
 | `B4` | `[ ]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
@@ -120,7 +119,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
 | `A2` | `[ ]` | Details form + onboarding step 2 + `/profile/details` | `B2` | `(auth)/onboarding/details/**`, `role-cards.tsx`, `(dashboard)/profile/details/**` | |
 | `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
-| `A4` | `[ ]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | also fixes the `sheet.tsx` scroll-lock bug (§5) |
+| `A4` | `[ ]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | scroll-lock bug (§5) **already fixed** — pulled forward while blocked on `B2`/`B3` |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
 | `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
 
@@ -302,13 +301,21 @@ allows a later step whose gate is open.
 
 ---
 
-## 5. Known bug to fix inside `A4`
+## 5. `sheet.tsx` scroll-lock bug — ✅ fixed
 
-`docs/progress-A.md` records it and nobody has fixed it: `src/components/ui/sheet.tsx` locks scroll with
-`document.body.style.overflow = "hidden"`, which locks nothing — `<body>` is not the element whose
-overflow propagates to the viewport, so the page still scrolls behind an open sheet. It needs
-`document.documentElement`. `A4` adds two more sheets, so fix it there rather than shipping two more on
-top of it.
+`docs/progress-A.md` recorded it and nobody had fixed it: `src/components/ui/sheet.tsx` locked scroll with
+`document.body.style.overflow = "hidden"`, which locks nothing. The **root element's** overflow is what
+propagates to the viewport, so `<html>` is the real scroller; setting `overflow: hidden` on `<body>` only
+turns body into a second scroll container that can never scroll, because its height *is* its content
+height. That is the same mechanism which broke page scrolling outright in `globals.css`, seen from the
+other side.
+
+Now targets `document.documentElement`. Pulled forward out of `A4` and shipped on its own, because it was
+the one piece of Lane A work with no gate while `B2`/`B3` were outstanding — and because `A4` adds two
+more sheets, which would have meant shipping two more on top of a broken lock.
+
+**NOT VERIFIED:** reasoned and typechecked, not observed. The behavioural check — open the accept-bid
+sheet and confirm the page behind it does not scroll on a finger drag — belongs to the `A6` device sweep.
 
 ---
 

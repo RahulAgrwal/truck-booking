@@ -40,8 +40,32 @@ model User {
   role         Role? // Nullable until onboarding completes
   createdAt    DateTime @default(now())
 
-  auctions Auction[] @relation("ShipperAuctions")
-  bids     Bid[]     @relation("CarrierBids")
+  // Contact details, collected at onboarding step 2 (docs/feature-contact-ratings.md §4).
+  // Every one of these is a SENSITIVE column: they are selected only inside
+  // src/lib/contact.ts, which gates them behind the "we did a deal" rule, and
+  // inside the owner's own profile read. Nowhere else — that is the enforcement.
+  // Nullable because every existing row predates the feature.
+  phone       String? // 10 bare digits, normalised, no +91 prefix stored
+  address     String?
+  companyName String? // SHIPPER only
+  truckNumber String? // CARRIER only — stored normalised, "MH12AB1234"
+  truckType   String? // CARRIER only
+
+  // null = onboarding step 2 not done. A timestamp rather than a boolean so we
+  // can tell a pre-feature user from one who filled the form today.
+  detailsCompletedAt DateTime?
+
+  // Exact rating aggregate: avg = ratingSum / ratingCount, and integers cannot
+  // drift. Both are incremented in the same transaction that inserts the
+  // Review, so the aggregate and the rows can never disagree. A cached Float
+  // average would be a second source of truth for one fact.
+  ratingSum   Int @default(0)
+  ratingCount Int @default(0)
+
+  auctions        Auction[] @relation("ShipperAuctions")
+  bids            Bid[]     @relation("CarrierBids")
+  reviewsWritten  Review[]  @relation("ReviewsWritten")
+  reviewsReceived Review[]  @relation("ReviewsReceived")
 }
 
 model Auction {
@@ -67,8 +91,9 @@ model Auction {
   distanceKm        Float?
   estimatedTimeMins Int?
 
-  shipper User  @relation("ShipperAuctions", fields: [shipperId], references: [id])
+  shipper User     @relation("ShipperAuctions", fields: [shipperId], references: [id])
   bids    Bid[]
+  reviews Review[]
 
   // Carrier feed (status + endTime) and the cron expiry sweep.
   @@index([status, endTime])
@@ -91,4 +116,30 @@ model Bid {
   @@index([auctionId, amount])
   // Carrier's "My Bids" screen.
   @@index([carrierId, createdAt])
+}
+
+/// One party rating the other after a completed job
+/// (docs/feature-contact-ratings.md §4). Ratings are PUBLIC reputation, not
+/// contact details — visible to anyone looking at a bid, and deliberately not
+/// gated by the Rule 1 visibility check.
+model Review {
+  id        String   @id @default(uuid())
+  auctionId String
+  authorId  String
+  subjectId String
+  stars     Int // 1–5, validated by SubmitReviewSchema and by submitReview
+  comment   String?
+  createdAt DateTime @default(now())
+
+  auction Auction @relation(fields: [auctionId], references: [id])
+  author  User    @relation("ReviewsWritten", fields: [authorId], references: [id])
+  subject User    @relation("ReviewsReceived", fields: [subjectId], references: [id])
+
+  // The double-submit guard, and the reason submitReview needs no read-then-
+  // write. Same reasoning as acceptBid's status-guarded updateMany
+  // (TechnicalDocument §5.4): a constraint is atomic, a read is not. Two taps
+  // on Submit race; the loser gets P2002 and a friendly message.
+  @@unique([auctionId, authorId])
+  // "Reviews received", newest first — the profile and contact-card read.
+  @@index([subjectId, createdAt])
 }

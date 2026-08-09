@@ -626,3 +626,50 @@ by what would hurt most if wrong:
 4. **#1–#3 — whether the tokens emit at all.** Cheapest possible check: load `/login` and see if it is
    styled.
 5. Everything else is cosmetic or single-screen.
+
+---
+
+# FEATURE — contact exchange + mutual ratings
+
+> Board: [`feature-contact-ratings.md`](./feature-contact-ratings.md). **The lane split changed for this
+> feature** — it is now horizontal: Lane B owns `prisma/**` and `src/lib/**`, Lane A owns `src/app/**` and
+> `src/components/**`. The `B1`–`B7` step IDs below are the *feature* board's, and are unrelated to the
+> `B1`–`B6` of the original build above.
+
+| Step | Status | Title | Commit | Notes |
+|------|--------|-------|--------|-------|
+| B1 | `[x]` | Schema + migration | `7a00aa1`+ | migration applied to Neon · **`B2` `B5` `B6` `B7` gates OPEN** |
+| B2 | `[ ]` | Contracts + typed stubs | | |
+| B3 | `[ ]` | Visibility rule | | |
+| B4 | `[ ]` | Actions | | |
+| B5 | `[ ]` | Session gate | | |
+| B6 | `[ ]` | Read model | | |
+| B7 | `[ ]` | Seed fixtures | | |
+
+## B1 notes — schema + migration
+
+`20260809051234_add_contact_details_and_reviews`, **created and applied against Neon**. Purely additive:
+eight nullable/defaulted columns on `User`, one new `Review` table, no existing column changes meaning, so
+every row that predates the feature stays valid and nothing needed backfilling.
+
+Matches the board's §4 contract exactly, with three things worth knowing before building on it:
+
+- **`Review` FKs are `ON DELETE RESTRICT`** (Prisma's default). That breaks `prisma/seed.ts` as it stands:
+  it deletes bids → auctions → users, and a `Review` row now blocks all three. `B7` must add
+  `prisma.review.deleteMany()` as the *first* delete. Flagging it here because the failure mode is a seed
+  that dies halfway with the tables already half-truncated.
+- **`stars` carries no DB-level 1–5 check.** Prisma cannot express a `CHECK` constraint in the schema, and
+  a hand-written one in the migration would be invisible to the schema file and silently dropped by the
+  next `migrate dev`. The bound is enforced twice in code instead — `SubmitReviewSchema` (`B2`) and
+  `submitReview` (`B4`) — which is where every other business rule in this codebase lives.
+- **`detailsCompletedAt` is a timestamp, not a boolean.** A pre-feature user and a user who filled the form
+  today are then distinguishable, which matters for `B5`'s redirect and for any later "please re-confirm
+  your details" prompt.
+
+`npm run db:seed` was **not** run — that is `B7`, and it truncates a database Lane A is using.
+
+**NOT VERIFIED (B1):** no typecheck/lint/build yet (the generated client changed shape, so `B2` is the
+first step that can meaningfully typecheck). Most likely to be wrong: nothing in the SQL — it applied
+cleanly and is additive — but the `Review` relation names (`ReviewsWritten` / `ReviewsReceived`) are the
+kind of thing a later `include` gets wrong silently, and the `RESTRICT` seed hazard above is a real,
+already-known break waiting for `B7`.
