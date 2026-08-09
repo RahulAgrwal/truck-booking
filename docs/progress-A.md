@@ -806,3 +806,13 @@ Most likely to be wrong, in order:
 3. **Vertical rhythm.** The chip is a new first child of a `flex flex-col gap-stack-sm` card, so every card
    grew ~32px and fewer fit above the fold. `loading.tsx` was bumped to match; if the skeleton still jumps
    on hydration, that 5 → 6 was the wrong size.
+
+---
+
+## Feature: email + password auth (user directive)
+
+Plan of record: [`docs/feature-email-password-auth.md`](./feature-email-password-auth.md).
+
+| Step | Status | Title | Notes |
+|------|--------|-------|-------|
+| E1 | [~] | Email + password sign-up and sign-in, alongside Google | all Lane A |
