@@ -21,6 +21,63 @@ export const SetUserRoleSchema = z.object({
   role: RoleSchema,
 });
 
+/* ------------------------------------------------------------------ *
+ * Email + password auth (docs/feature-email-password-auth.md §3.4).
+ * ------------------------------------------------------------------ */
+
+/**
+ * ⚠ **These are UX, not the security boundary.** They run in the browser, before
+ * the Firebase call, so a bad password costs no round trip and the message lands
+ * on the right field. Nothing here protects anything: Firebase verifies the
+ * credential, and the server re-verifies the resulting token with
+ * `verifyIdToken`. Do not add a rule here and assume it is enforced.
+ *
+ * `name` is the one exception — it is a client-supplied *value* the server
+ * actually writes, so `createSession` parses it again with `SignUpNameSchema`.
+ */
+
+/** Trimmed and lowercased before validation, so what reaches Firebase is canonical. */
+const emailField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email("Enter a valid email address."));
+
+/**
+ * Eight, where Firebase's own floor is six.
+ *
+ * The upper bound is not a security rule either; it stops a paste of an entire
+ * document being sent as a password.
+ */
+const newPasswordField = z
+  .string()
+  .min(8, "Choose a longer password — at least 8 characters.")
+  .max(72, "Passwords must be 72 characters or fewer.");
+
+/** The name a driver or shipper is shown as. Re-parsed server-side. */
+export const SignUpNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Enter your name.")
+  .max(80, "Name must be 80 characters or fewer.");
+
+export const EmailSignInSchema = z.object({
+  email: emailField,
+  // Deliberately only `min(1)`: the rules may have changed since this account
+  // was created, and refusing to even *attempt* a sign-in because an existing
+  // valid password is now too short would lock the user out of their own account.
+  password: z.string().min(1, "Enter your password."),
+});
+
+export const EmailSignUpSchema = z.object({
+  name: SignUpNameSchema,
+  email: emailField,
+  password: newPasswordField,
+});
+
+export type EmailSignInInput = z.infer<typeof EmailSignInSchema>;
+export type EmailSignUpInput = z.infer<typeof EmailSignUpSchema>;
+
 /** Auction durations offered as chips on the create form. */
 export const AUCTION_DURATIONS_HOURS = [1, 6, 12, 24] as const;
 

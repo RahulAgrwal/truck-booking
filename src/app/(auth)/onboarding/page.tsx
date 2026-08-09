@@ -11,7 +11,7 @@ import { RoleCards } from "./role-cards";
  */
 export default async function OnboardingPage() {
   const session = await requireSession();
-  if (session.role !== null) redirect(homePathFor(session.role));
+  if (session.role !== null) redirect(homePathFor(session.role, session.detailsComplete));
 
   return (
     <main className="flex-1 flex flex-col px-margin-mobile pt-stack-lg pb-[100px] min-h-screen">

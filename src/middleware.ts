@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const SESSION_COOKIE = "__session";
 
 // Signed-in users have no business here.
-const PUBLIC_ONLY = ["/login"];
+const PUBLIC_ONLY = ["/login", "/signup"];
 
 // Everything below requires a cookie.
 const PROTECTED = ["/shipper", "/carrier", "/onboarding", "/profile"];

@@ -158,6 +158,13 @@ only where they are written changes:
 
 `.env.example` carries every key with empty/dummy values. `.env.local` is gitignored and never committed.
 
+**Not an environment variable, but required for auth to work:** both sign-in providers must be enabled in
+the Firebase console under *Authentication → Sign-in method* — **Google** and **Email/Password**. There is
+no code path or variable that can substitute; with Email/Password off, every sign-up fails with
+`auth/operation-not-allowed` (which `src/lib/firebase/auth-errors.ts` reports by name, not as a generic
+error). Leave *one account per email address* at its default so a verified Google identity links to an
+existing password account instead of minting a second Firebase UID for the same address (§4.1).
+
 ---
 
 ## 3. Data model
@@ -270,19 +277,39 @@ Must cover every state both lanes need to see:
 
 ### 4.1 Sequence
 
+Two providers, one pipeline. Google and email/password differ only in how the browser obtains an ID
+token; everything from `createSession` rightwards is identical and provider-agnostic
+(docs/feature-email-password-auth.md §1).
+
 ```
 Client                     Server Action              Firebase Admin        Postgres
-  │ signInWithPopup(Google)
-  │───────────────► Firebase Auth ──► ID token
-  │ createSession(idToken)
+  │ signInWithPopup(Google)          ┐
+  │ signInWithEmailAndPassword(…)    ├─► Firebase Auth ──► ID token
+  │ createUserWithEmailAndPassword(…)┘   (+ updateProfile → getIdToken(true))
+  │ createSession(idToken, displayName?)
   │──────────────────────►│
   │                       │ verifyIdToken ───────────────►│
   │                       │ createSessionCookie(5d) ──────►│
   │                       │ upsert User by firebaseUid ───────────────────►│
   │                       │ Set-Cookie __session (HttpOnly, Secure, Lax)
-  │◄──────────────────────│ { ok, role }
-  │ role === null → /onboarding · SHIPPER → /shipper · CARRIER → /carrier
+  │◄──────────────────────│ { ok, data: { next } }
+  │ role === null → /onboarding · !detailsComplete → /onboarding/details
+  │ SHIPPER → /shipper · CARRIER → /carrier
 ```
+
+**`displayName` is a sign-up-only argument.** A bare email/password token often carries no `name`
+claim, so without it the `User` row is created with the email address as the user's name — silently and
+permanently. It is re-validated server-side with `SignUpNameSchema` and never overrides a name the token
+actually carries.
+
+**Routes.** `/login` (sign in) and `/signup` (create an account); both are in the middleware's
+`PUBLIC_ONLY` list. The provider helpers live in `src/lib/firebase/clientApp.ts` —
+`signInWithGoogle`, `signInWithEmail`, `signUpWithEmail` — and all three return a token, nothing more.
+
+**Deliberately not built:** password reset, email verification, and Google↔password account linking
+(user-agreed scope). A user who forgets their password must be reset from the Firebase console.
+`src/lib/firebase/auth-errors.ts` maps every provider failure — including the cross-provider collision —
+to copy that says what actually happened.
 
 ### 4.2 Session helpers — `src/lib/session.ts`
 

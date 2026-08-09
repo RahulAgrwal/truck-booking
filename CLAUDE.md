@@ -311,7 +311,11 @@ src/
     page.tsx                      [A] landing → redirect by session/role
     globals.css                   [B] @theme tokens (Tailwind v4), safe-area, overscroll
     (auth)/
-      login/page.tsx              [A] Stitch: Splash & Login
+      login/page.tsx              [A] Stitch: Splash & Login (+ email form)
+      signup/page.tsx             [A] hand-built — create an account
+      email-auth-form.tsx         [A] "use client" — signin | signup, one component
+      password-field.tsx          [A] "use client" — Input + show/hide toggle
+      auth-divider.tsx            [A] the "or" rule
       onboarding/page.tsx         [A] Stitch: Role Selection
     (dashboard)/
       shipper/
@@ -337,8 +341,9 @@ src/
     prisma.ts                     [A] singleton (pg driver adapter)
     maps.ts                       [A] Distance Matrix — SERVER key, server-only
     session.ts                    [A] getSession / requireSession / requireRole
-    firebase/clientApp.ts         [A]
+    firebase/clientApp.ts         [A] signInWithGoogle / signInWithEmail / signUpWithEmail
     firebase/adminApp.ts          [A]
+    firebase/auth-errors.ts       [A] Firebase error codes → user-facing copy
     actions/
       user.ts                     [A] setUserRole
       auction.ts                  [A] createAuction, acceptBid

@@ -322,7 +322,7 @@ little to spare and may need the logo shrunk or the gaps tightened on shorter ph
 
 | Step | Status | Title | Notes |
 |---|---|---|---|
-| `E1` | `[~]` | Email + password sign-up and sign-in | Single step; all Lane A; claimed before code per CLAUDE.md §10.0 |
+| `E1` | `[x]` | Email + password sign-up and sign-in | Single step; all Lane A. typecheck / lint / test green; see `docs/progress-A.md` for the NOT VERIFIED list |
 
 Markers as CLAUDE.md §10.0: `[ ]` not started · `[~]` in progress · `[x]` done, committed, pushed ·
 `[!]` blocked.

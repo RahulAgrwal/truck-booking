@@ -1,8 +1,11 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getSession, homePathFor } from "@/lib/session";
 
+import { AuthDivider } from "../auth-divider";
+import { EmailAuthForm } from "../email-auth-form";
 import { GoogleButton } from "./google-button";
 
 /**
@@ -14,20 +17,24 @@ import { GoogleButton } from "./google-button";
  */
 export default async function LoginPage() {
   const session = await getSession();
-  if (session) redirect(homePathFor(session.role));
+  if (session) redirect(homePathFor(session.role, session.detailsComplete));
 
   return (
     <main className="flex min-h-dvh w-full flex-col items-center px-margin-mobile pt-safe">
       {/*
-        One centred group — mark, tagline, button and terms travel together.
+        One centred group — mark, tagline, form and terms travel together.
 
-        The previous version had `mt-auto` on both the mark and the button,
-        which pushed them to opposite ends of the viewport and stranded the
-        button at the very bottom, far from the text it belongs to. A single
-        `flex-1 justify-center` block keeps the whole call-to-action as one
-        readable unit, which also stops it drifting on taller phones.
+        `justify-center` with `flex-1`, not `mt-auto` on the pieces: an earlier
+        version pushed the mark and the button to opposite ends of the viewport
+        and stranded the button far from the text it belongs to.
+
+        The screen now carries a two-field form as well as the Google button, so
+        the gap dropped from `stack-lg` to `stack-md` and the mark shrank from
+        `w-64` to `w-48`. At 390×844 the whole column is ~640px, which clears
+        the fold; on a 360×640 phone it does not, and `justify-center` on a
+        `min-h-dvh` column lets it scroll rather than clip.
       */}
-      <div className="flex w-full flex-1 flex-col items-center justify-center gap-stack-lg">
+      <div className="flex w-full flex-1 flex-col items-center justify-center gap-stack-md py-stack-lg">
         <TruckMark />
 
         <h1 className="text-center font-headline-lg text-headline-lg text-on-surface">
@@ -35,7 +42,18 @@ export default async function LoginPage() {
         </h1>
 
         <div className="flex w-full flex-col gap-stack-md">
+          <EmailAuthForm mode="signin" />
+
+          <AuthDivider />
+
           <GoogleButton />
+
+          <p className="text-center font-body-md text-body-md text-on-surface-variant">
+            New to TruckingGO?{" "}
+            <Link className="font-body-lg text-body-lg text-primary underline" href="/signup">
+              Create an account
+            </Link>
+          </p>
 
           <p className="text-center font-label-bold text-label-bold text-secondary">
             By logging in, you agree to our{" "}
@@ -81,7 +99,7 @@ function TruckMark() {
       width={415}
       height={112}
       priority
-      className="h-auto w-64 max-w-full"
+      className="h-auto w-48 max-w-full"
     />
   );
 }

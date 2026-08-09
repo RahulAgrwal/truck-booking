@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+import { Prisma } from "@/generated/prisma/client";
 import { getAdminAuth } from "@/lib/firebase/adminApp";
 import { prisma } from "@/lib/prisma";
 import {
@@ -16,9 +17,13 @@ import {
 import {
   ContactDetailsSchema,
   SetUserRoleSchema,
+  SignUpNameSchema,
   firstIssue,
   type ActionResult,
 } from "@/lib/schemas";
+
+/** Prisma's unique-constraint violation — here, always `User.email`. */
+const UNIQUE_VIOLATION = "P2002";
 
 /**
  * Exchange a Firebase ID token for an HttpOnly session cookie, upserting the
@@ -26,8 +31,22 @@ import {
  *
  * A session cookie rather than the raw ID token: ID tokens last an hour and
  * cannot be revoked, session cookies last days and can (decision D6).
+ *
+ * **Provider-agnostic.** Google and email/password both arrive here with an ID
+ * token and nothing else distinguishes them
+ * (docs/feature-email-password-auth.md §1).
+ *
+ * `displayName` is the sign-up form's answer to a gap in the second case: a
+ * bare email/password token frequently carries no `name` claim, and without
+ * this the row would be created with the email address as the user's name —
+ * silently, permanently, with no screen in the app to correct it. It is
+ * re-validated here rather than trusted, and it never wins over a name the
+ * token actually carries.
  */
-export async function createSession(idToken: string): Promise<ActionResult<{ next: string }>> {
+export async function createSession(
+  idToken: string,
+  displayName?: string,
+): Promise<ActionResult<{ next: string }>> {
   if (!idToken) return { ok: false, error: "Missing sign-in token." };
 
   try {
@@ -35,20 +54,37 @@ export async function createSession(idToken: string): Promise<ActionResult<{ nex
     const decoded = await auth.verifyIdToken(idToken);
 
     if (!decoded.email) {
-      return { ok: false, error: "Your Google account has no email address." };
+      return { ok: false, error: "That account has no email address." };
     }
+
+    // Token first, the form's answer second, the email address only as a
+    // last resort — it is a legible name, which is the whole bar here.
+    const parsedName = displayName === undefined ? null : SignUpNameSchema.safeParse(displayName);
+    const claimedName = decoded.name?.trim() || null;
+    const resolvedName = claimedName ?? (parsedName?.success ? parsedName.data : null);
 
     const user = await prisma.user.upsert({
       where: { firebaseUid: decoded.uid },
       update: {
         email: decoded.email,
-        name: decoded.name ?? decoded.email,
-        profileImage: decoded.picture ?? null,
+        /*
+          Conditional, where both of these used to be unconditional writes.
+
+          `name: decoded.name ?? decoded.email` overwrote a good name with an
+          email address on every sign-in whose token lacked the claim — which is
+          every email/password sign-in. `profileImage: decoded.picture ?? null`
+          had the same shape of bug for Google users: a momentarily absent
+          picture claim nulled a stored avatar.
+
+          Absent claim means "no news", not "delete what you have".
+        */
+        ...(resolvedName ? { name: resolvedName } : {}),
+        ...(decoded.picture ? { profileImage: decoded.picture } : {}),
       },
       create: {
         firebaseUid: decoded.uid,
         email: decoded.email,
-        name: decoded.name ?? decoded.email,
+        name: resolvedName ?? decoded.email,
         profileImage: decoded.picture ?? null,
         // role stays null — /onboarding sets it.
       },
@@ -74,6 +110,32 @@ export async function createSession(idToken: string): Promise<ActionResult<{ nex
       data: { next: homePathFor(user.role, user.detailsCompletedAt !== null) },
     };
   } catch (error) {
+    /*
+      The one database failure worth naming.
+
+      `User.email` is @unique, but the upsert keys on `firebaseUid` — so a
+      *second* Firebase UID carrying an email that already has a row takes the
+      `create` branch and violates the constraint. That happens when the same
+      person signs up with a password and later with Google, or the reverse.
+
+      Firebase's default "one account per email address" setting makes it rare:
+      Google is a verified-email provider, so Firebase links it to the existing
+      account and reuses the UID. Rare is not never, and the generic message
+      below is a dead end for someone who has an account and cannot get in.
+
+      We do not build the linking flow (docs/feature-email-password-auth.md §0),
+      so the honest instruction is to use the other door.
+    */
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === UNIQUE_VIOLATION
+    ) {
+      return {
+        ok: false,
+        error: "An account already exists for this email. Sign in with the method you used before.",
+      };
+    }
+
     console.error("[createSession]", error);
     return { ok: false, error: "Could not sign you in. Please try again." };
   }

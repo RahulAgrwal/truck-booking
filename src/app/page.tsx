@@ -9,5 +9,5 @@ import { getSession, homePathFor } from "@/lib/session";
 export default async function Home() {
   const session = await getSession();
   if (!session) redirect("/login");
-  redirect(homePathFor(session.role));
+  redirect(homePathFor(session.role, session.detailsComplete));
 }

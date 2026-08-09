@@ -815,4 +815,68 @@ Plan of record: [`docs/feature-email-password-auth.md`](./feature-email-password
 
 | Step | Status | Title | Notes |
 |------|--------|-------|-------|
-| E1 | [~] | Email + password sign-up and sign-in, alongside Google | all Lane A |
+| E1 | [x] | Email + password sign-up and sign-in, alongside Google | all Lane A |
+
+### Shipped
+
+- **Two more doors, one pipeline.** `signInWithEmail` / `signUpWithEmail` join `signInWithGoogle` in
+  `clientApp.ts`, all three with the same contract: do the browser dance, return an ID token. Nothing
+  downstream of the token changed — same `createSession`, same `createSessionCookie(5d)`, same `__session`
+  cookie, same `verifySessionCookie(cookie, true)`, same middleware gate, same onboarding funnel. No
+  password column, no second session system, no new env var.
+- `/signup` (new, hand-composed — not a Stitch screen) and `/login` (now carries the sign-in form above the
+  Google button). `/signup` added to the middleware's `PUBLIC_ONLY`.
+- `src/lib/firebase/auth-errors.ts` — Firebase codes → copy, with **every wrong-credential code collapsed
+  to one message**. `auth-errors.test.ts` locks that down; see "decisions" below.
+- 20 new tests (119 → **139**). `typecheck` ✅ · `lint` ✅ · `test` ✅ 139/11 files.
+
+### Three decisions worth keeping
+
+1. **The sign-in error is deliberately vague, and there is a test to keep it that way.**
+   `auth/user-not-found`, `auth/wrong-password` and `auth/invalid-credential` all render "Incorrect email
+   or password." Telling them apart turns the login form into an account-enumeration oracle — anyone could
+   check whether a given person uses TruckingGO. Firebase already made this choice with its newer
+   `auth/invalid-credential`; special-casing `user-not-found` would undo it. `fieldForCode` likewise
+   refuses to pin those codes to the email field, for the same reason.
+2. **`EmailSignInSchema` accepts a short password on purpose.** Sign-up requires 8; sign-in requires 1. An
+   account created before the rule still has a valid 6-character password, and refusing to *attempt* the
+   sign-in would lock its owner out — with no reset flow to rescue them (out of agreed scope).
+3. **The display name travels twice.** `updateProfile` then `getIdToken(true)` should put the `name` claim
+   in the token, but propagation is not contractually immediate, so the name is *also* passed to
+   `createSession` and re-validated there with `SignUpNameSchema`. The failure it guards is silent and
+   permanent: lose the race and the user's name is their email address, with no screen in the app to fix it.
+
+### Two latent bugs fixed in passing
+
+`createSession`'s upsert wrote `name: decoded.name ?? decoded.email` and
+`profileImage: decoded.picture ?? null` **unconditionally on update**. Both are now conditional — an absent
+claim means "no news", not "delete what you have". The first was harmless while Google was the only
+provider (its tokens always carry `name`) and becomes a name-clobbering bug on every email/password
+sign-in. The second could null a stored Google avatar on any token that momentarily lacked `picture`.
+
+Also closed the Lane B → Lane A handoff: all four `homePathFor(session.role)` call sites now pass
+`session.detailsComplete` (`src/app/page.tsx`, `(auth)/login`, `(auth)/onboarding`, `(auth)/signup`).
+
+**NOT VERIFIED (E1):** `npm run build` was still running when this was committed — **check it before
+trusting this entry**; `typecheck`, `lint` and all 139 tests are green. Nothing has been rendered: no
+390×844 pass, and **not one line of this has run against a real Firebase project**, because
+Email/Password must first be enabled in the console (feature doc §2) and `.env.local` still has
+`DEV_AUTH_BYPASS=true`, which makes `/login` redirect away before any of it is reachable.
+
+Most likely to be wrong, in order:
+
+1. **`/login` overflows on a short phone.** It gained a two-field form, a submit, a divider and a link on
+   top of the logo, `h1`, Google button and terms line — the mark was cut `w-64` → `w-48` and the gap
+   `stack-lg` → `stack-md` to compensate, unmeasured. ~640px of column in ~780px of usable viewport at
+   390×844; at 360×640 it will not fit and depends on the `min-h-dvh` column scrolling rather than
+   clipping. **This is the first thing to check.**
+2. **The `updateProfile` → `getIdToken(true)` claim race.** Symptom: a new user's name shows as their email
+   address. The `displayName` passthrough is the fallback; if it shows the wrong name anyway, check the
+   argument is actually reaching `createSession` before suspecting Firebase.
+3. **The password toggle's tap target.** `-mr-stack-md` on a 48×48 button assumes `Input`'s wrapper keeps
+   its `px-stack-md`; if Lane B changes that padding the button overhangs the border. Test is
+   `elementFromPoint` at the control's top edge returning the BUTTON, not the wrapper DIV.
+4. **The `P2002` collision branch has never executed** — reaching it needs two Firebase UIDs on one email,
+   which Firebase's one-account-per-email default mostly prevents.
+5. **`AuthDivider`'s label punch-out** assumes the page background is `surface`. On any other background
+   the "or" sits in a mismatched rectangle.
