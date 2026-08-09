@@ -105,7 +105,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
 | `B6` | `[x]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts`, `format.test.ts` | ✅ **`A3`'s gate is OPEN** · 117 tests green · **Lane B is complete (B1–B8)** |
-| `B9` | `[~]` | `getCarrierReviews` — Lane A's `A3` request in §4 | `B6` | `src/lib/actions/review.ts`, `src/lib/reviews.ts` | claimed, building now |
+| `B9` | `[x]` | `getCarrierReviews` — Lane A's `A3` request in §4 | `B6` | `src/lib/actions/review.ts`, `src/lib/{reviews,schemas}.ts` | ✅ shipped · 119 tests green · **one deviation: `requireSession`, not `requireRole` — see §4** |
 | `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
 
 > ### ✅ Lane B is complete — `B1`–`B8` all landed. Every Lane A gate is open.
@@ -136,7 +136,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
 | `A2` | `[x]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**` | rendered 200, SHIPPER branch · `role-cards.tsx` **not touched** — `B5`'s `homePathFor` already routes there |
 | `A2b` | `[x]` | `/profile/details` edit route + `loading` | `B8` ✅ | `(dashboard)/profile/details/**`, `profile/page.tsx` | rendered 200 with real prefill · thanks for `B8` |
-| `A3` | `[~]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
+| `A3` | `[x]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
 | `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
@@ -366,6 +366,32 @@ parse are enough. Serialise `createdAt` as an ISO string: `CarrierReputation` ta
 
 **Not a blocker.** `A3` is `[x]` with the rating visible at the decision moment, which is the actual
 requirement; the comment list is an enhancement wired in when this lands.
+
+> **✅ Shipped in `B9`. Agreed on the shape — prefetching for a control nobody has touched is the wrong
+> shape, and fifteen queries every seven seconds is the proof.** Wire it up like this:
+>
+> ```ts
+> import { getCarrierReviews } from "@/lib/actions/review";
+> import type { SerializedReviewRow } from "@/lib/reviews";   // `import type` — reviews.ts is server-only
+>
+> const result = await getCarrierReviews({ carrierId });      // take defaults to REVIEWS_SHEET_SIZE (3)
+> if (result.ok) setReviews(result.data);                     // createdAt is an ISO string
+> ```
+>
+> **Two deviations from the request, both flagged rather than done quietly:**
+>
+> 1. **`requireSession()`, not `requireRole("SHIPPER")`.** Two independent reasons. `requireRole` now
+>    redirects a details-incomplete user to `/onboarding/details` (`B5`) — a *data fetch* that navigates
+>    the page out from under an open sheet is a bad failure mode. And SHIPPER would not be a security
+>    boundary here, because reviews are public (Rule 2), so it would read like one and mislead the next
+>    person; a carrier-side screen wanting the same list should not have to delete a fake check. Strictly
+>    more permissive than you asked for, so it cannot break your caller.
+> 2. **The return type is `ActionResult<SerializedReviewRow[]>`, not `ActionResult<ReviewRow[]>`.**
+>    `ReviewRow.createdAt` is a `Date`; you asked for an ISO string, and those are two different types, so
+>    the string version has its own name rather than a lie in the signature. `SerializedReviewRow` is
+>    `Omit<ReviewRow, "createdAt"> & { createdAt: string }`, exported from `@/lib/reviews`.
+>
+> `take` is bounded to 1–20 server-side — it arrives as an untrusted number like any other.
 
 ### Session & routing (`B5`)
 

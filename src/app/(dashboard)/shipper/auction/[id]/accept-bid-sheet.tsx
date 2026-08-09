@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { RatingStars } from "@/components/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { acceptBid } from "@/lib/actions/auction";
 import { cn } from "@/lib/design/cn";
-import { formatINR } from "@/lib/format";
+import { formatINR, ratingAverage } from "@/lib/format";
 
 /**
  * "Accept Bid", behind a bottom-sheet confirm (§7.6).
@@ -27,12 +28,17 @@ export function AcceptBidSheet({
   carrierName,
   amount,
   isBest,
+  carrierRatingSum,
+  carrierRatingCount,
 }: {
   auctionId: string;
   bidId: string;
   carrierName: string;
   amount: number;
   isBest: boolean;
+  /** Reputation, shown before the shipper commits. */
+  carrierRatingSum: number;
+  carrierRatingCount: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -106,6 +112,22 @@ export function AcceptBidSheet({
               {carrierName}
             </span>
           </div>
+
+          {/*
+            Reputation at the moment of committing, not three screens earlier.
+            This sheet is the last thing a shipper sees before an irreversible
+            write, so the two facts that should decide it — what they charge and
+            how they have performed — belong side by side. Costs no extra query:
+            the sums ride along on the carrier select the page already issues.
+          */}
+          <div className="flex items-center justify-between gap-stack-sm">
+            <span className="font-body-md text-body-md text-on-surface-variant">Rating</span>
+            <RatingStars
+              average={ratingAverage(carrierRatingSum, carrierRatingCount)}
+              count={carrierRatingCount}
+            />
+          </div>
+
           <div className="flex items-baseline justify-between gap-stack-sm">
             <span className="font-body-md text-body-md text-on-surface-variant">Agreed price</span>
             <span className="font-headline-md text-headline-md text-on-surface">
@@ -113,6 +135,18 @@ export function AcceptBidSheet({
             </span>
           </div>
         </div>
+
+        {/*
+          A carrier with no history is not a bad carrier, but it is a different
+          decision, and a shipper about to hand over a load should be told which
+          one they are making rather than left to read an absence.
+        */}
+        {carrierRatingCount === 0 ? (
+          <p className="mt-stack-sm font-body-md text-body-md text-on-surface-variant">
+            This carrier hasn&apos;t completed a job through TruckingGO yet — there&apos;s no track
+            record to go on.
+          </p>
+        ) : null}
       </Sheet>
     </>
   );

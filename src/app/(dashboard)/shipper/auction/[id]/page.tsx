@@ -17,6 +17,7 @@ import { getDeal } from "@/lib/contact";
 import { formatRouteSummary } from "@/lib/design/feed";
 import { formatINR, formatWeight } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { raterSelect } from "@/lib/reviews";
 import { requireRole } from "@/lib/session";
 
 import { AcceptBidSheet } from "./accept-bid-sheet";
@@ -38,7 +39,10 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
     include: {
       bids: {
         orderBy: { amount: "asc" },
-        include: { carrier: { select: { id: true, name: true, profileImage: true } } },
+        // `raterSelect` (Lane B) rather than a hand-written select: one
+        // definition of "someone whose reputation we show", so the bid row,
+        // the accept sheet and the contact card cannot disagree about it.
+        include: { carrier: { select: raterSelect } },
       },
     },
   });
@@ -177,6 +181,8 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
                       carrierName: row.carrier.name,
                       carrierImage: row.carrier.profileImage,
                       status: row.status,
+                      carrierRatingSum: row.carrier.ratingSum,
+                      carrierRatingCount: row.carrier.ratingCount,
                     }}
                     isBest={live && row.id === bestId}
                     action={
@@ -187,6 +193,8 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
                           carrierName={row.carrier.name}
                           amount={row.amount}
                           isBest={row.id === bestId}
+                          carrierRatingSum={row.carrier.ratingSum}
+                          carrierRatingCount={row.carrier.ratingCount}
                         />
                       ) : undefined
                     }
