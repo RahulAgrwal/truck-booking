@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { PollingRefresher } from "@/components/polling-refresher";
 import { Timer } from "@/components/timer";
 import { Icon } from "@/components/ui/icon";
+import { isPastDeadline } from "@/lib/auction-close";
 import { formatRouteSummary } from "@/lib/design/feed";
 import { formatWeight } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -58,7 +59,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
     client `Timer` refreshes this page at zero, which re-renders with
     `expired: true` — but the form being open is never what decides.
   */
-  const expired = auction.status !== "ACTIVE" || auction.endTime.getTime() <= Date.now();
+  const expired = auction.status !== "ACTIVE" || isPastDeadline(auction.endTime);
   const lowestBid = auction.bids[0]?.amount ?? null;
 
   return (
@@ -156,7 +157,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
   );
 }
 
-function Fact({ icon, children }: { icon: string; children: React.ReactNode }) {
+function Fact({ icon, children }: { icon: string; children: ReactNode }) {
   return (
     <span className="flex items-center gap-1 text-secondary">
       <Icon name={icon} className="text-[16px]" />

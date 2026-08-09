@@ -42,6 +42,10 @@ export type AuctionCardData = {
   estimatedTimeMins?: number | null;
   pickupAt?: string | null;
   dropoffAt?: string | null;
+  /** `history` variant only — which terminal state this auction reached. */
+  status?: "ACTIVE" | "CLOSED_EXPIRED" | "COMPLETED_ASSIGNED";
+  /** `history` variant only — the accepted bid's amount, when one was accepted. */
+  winningAmount?: number | null;
 };
 
 export function AuctionCard({
@@ -50,13 +54,83 @@ export function AuctionCard({
   className,
 }: {
   auction: AuctionCardData;
-  variant: "shipper" | "carrier";
+  variant: "shipper" | "carrier" | "history";
   className?: string;
 }) {
+  if (variant === "history") return <HistoryAuctionCard auction={auction} className={className} />;
   return variant === "shipper" ? (
     <ShipperAuctionCard auction={auction} className={className} />
   ) : (
     <CarrierAuctionCard auction={auction} className={className} />
+  );
+}
+
+/**
+ * `/shipper/history` (A7) — a finished auction. Hand-built; no Stitch screen.
+ *
+ * No LIVE badge and no `Timer`: both would be lies about a terminal auction,
+ * and mounting a countdown per row on a long list costs an interval each for
+ * nothing. What replaces them is the outcome, which is the only thing anyone
+ * opens this screen to see.
+ */
+function HistoryAuctionCard({
+  auction,
+  className,
+}: {
+  auction: AuctionCardData;
+  className?: string;
+}) {
+  const assigned = auction.status === "COMPLETED_ASSIGNED";
+
+  return (
+    <Link
+      href={`/shipper/auction/${auction.id}`}
+      className={cn("block", className)}
+      aria-label={`${auction.pickupLocation} to ${auction.dropoffLocation}, ${
+        assigned ? "assigned" : "expired"
+      }`}
+    >
+      <article className="rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
+        <div className="mb-stack-md flex items-start justify-between gap-stack-sm">
+          {/* Word first — colour never carries the state alone (§7.7). */}
+          <Badge tone={assigned ? "success" : "neutral"}>{assigned ? "Assigned" : "Expired"}</Badge>
+          <span className="shrink-0 font-body-md text-body-md text-on-surface-variant">
+            {new Date(auction.endTime).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        </div>
+
+        <RouteRow
+          from={auction.pickupLocation}
+          to={auction.dropoffLocation}
+          className="mb-stack-md"
+        />
+
+        <div className="flex items-center justify-between gap-stack-sm rounded bg-surface-container-low p-3">
+          <div className="flex min-w-0 items-center gap-2 font-body-md text-body-md text-on-surface-variant">
+            <Icon name="weight" className="text-[18px]" />
+            <span className="truncate">
+              {formatWeight(auction.weightKg)} • {auction.materialDetails}
+            </span>
+          </div>
+
+          {assigned && typeof auction.winningAmount === "number" ? (
+            <span className="shrink-0 font-headline-md text-headline-md text-tertiary">
+              {formatINR(auction.winningAmount)}
+            </span>
+          ) : (
+            <span className="shrink-0 font-body-md text-body-md text-on-surface-variant">
+              {auction.bidCount === 0
+                ? "No bids"
+                : `${auction.bidCount} ${auction.bidCount === 1 ? "bid" : "bids"}`}
+            </span>
+          )}
+        </div>
+      </article>
+    </Link>
   );
 }
 

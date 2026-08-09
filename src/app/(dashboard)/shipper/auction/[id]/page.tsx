@@ -9,6 +9,7 @@ import { Timer } from "@/components/timer";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
+import { isPastDeadline } from "@/lib/auction-close";
 import { bestBidId, latestBidPerCarrier } from "@/lib/bids";
 import { formatRouteSummary } from "@/lib/design/feed";
 import { formatINR, formatWeight } from "@/lib/format";
@@ -51,7 +52,7 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
   const rows = latestBidPerCarrier(auction.bids);
   const bestId = bestBidId(rows);
 
-  const expired = auction.endTime.getTime() <= Date.now();
+  const expired = isPastDeadline(auction.endTime);
   const live = auction.status === "ACTIVE" && !expired;
   const acceptedBid = auction.bids.find((bid) => bid.status === "ACCEPTED") ?? null;
 

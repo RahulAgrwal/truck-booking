@@ -46,11 +46,7 @@ export function Timer({
   const refreshed = useRef(false);
 
   useEffect(() => {
-    // Re-sync immediately: the value from the first render was computed
-    // against whatever `Date.now()` was during SSR.
-    setRemaining(formatRemaining(endTime));
-
-    const id = setInterval(() => {
+    function tick() {
       const next = formatRemaining(endTime);
       setRemaining(next);
 
@@ -60,9 +56,22 @@ export function Timer({
         // Harmless: §5.3 guard 4 rejects a bid on an elapsed auction anyway.
         router.refresh();
       }
-    }, 1000);
+    }
 
-    return () => clearInterval(id);
+    /*
+      The first render's value came from whatever `Date.now()` was during SSR,
+      so it needs re-syncing — but on a macrotask, not synchronously in the
+      effect body. A synchronous setState here cascades a second render before
+      paint on every mounted Timer, which on a feed of cards is one per row;
+      React's compiler lint rejects it for exactly that reason.
+    */
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [endTime, router]);
 
   const label = remaining.expired ? "Expired" : remaining.label;

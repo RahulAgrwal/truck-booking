@@ -14,7 +14,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [x] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | by Claude 2 — see note below · **A6 gate open** |
 | A6 | [x] | Accept-bid transaction + cron | A5 | | |
-| A7 | [~] | Shipper history + deploy docs | A6 | | |
+| A7 | [x] | Shipper history + deploy docs | A6 | | |
 
 Out-of-band: `c6fd860` — pinned npm 11 in the Docker deps stage (Cloud Build `npm ci` fix).
 
@@ -261,3 +261,39 @@ unpooled URL or a lower isolation level, and the guarded `updateMany` still carr
 (2) the actual race, which needs two concurrent callers to observe — the unit test covers the predicate,
 not the concurrency; (3) `{ closed: n }` counts against seeded auction 3 (ends ~4 min out); (4) the 401
 path with a real `CRON_SECRET` in Cloud Run.
+
+## A7 notes (by Claude 2)
+
+`/shipper/history` + `loading` + `error`, `docs/deploy.md`, and a `history` variant on `AuctionCard`.
+
+**History shows only terminal auctions**, newest first. No `PollingRefresher` and no per-row `Timer`:
+§3.2 has no arrow out of either terminal state, so nothing on this screen can change — polling would be a
+request every 7s to re-render identical rows, and a countdown per row would be one interval each counting
+down to a deadline that already passed. The outcome replaces them: assigned rows show the winning ₹ in
+`tertiary`, expired rows show the bid count, because "3 bids and still nobody won" is the useful fact.
+
+**Secret audit (accept criterion) — clean.** The yaml/Dockerfile grep returns exactly one hit: the
+documented `postgresql://build:build@localhost` placeholder, never connected to. `cloudbuild.yaml` carries
+all 12 secrets from §9.3, split correctly — 7 runtime via `--set-secrets`, 5 public `NEXT_PUBLIC_*` via
+build args, and `GOOGLE_MAPS_SERVER_API_KEY` deliberately absent from `availableSecrets` so it cannot
+become a build arg by accident.
+
+### Lint regression caught here, fixed across both lanes' files
+
+`npm run lint` began failing during this step with **4 errors it had not raised before** — React's compiler
+rules activated on a dependency bump. All four were real:
+
+- **`Date.now()` in a Server Component body** (both auction detail pages). Extracted to `isPastDeadline` in
+  `auction-close.ts`, beside the `lte` boundary it shares with the sweep and `submitBid` guard 4. The
+  complaint is fair even server-side: the value is request-scoped, not render-scoped.
+- **Synchronous `setState` in an effect** (`timer.tsx`, `offline-banner.tsx`), both now syncing on a
+  macrotask. This one mattered: `Timer` mounts once per card on a feed and `OfflineBanner` sits in
+  `AppShell`, so each was cascading an extra pre-paint render on every route.
+
+Worth carrying into verification: **these files passed lint earlier in the build.** Green before today is
+not green now — re-run everything rather than trusting an earlier pass.
+
+**NOT VERIFIED (A7):** nothing rendered. Most likely wrong: (1) history against seeded auctions 4 and 5 —
+whether the assigned row finds its accepted bid and shows the right ₹; (2) `docs/deploy.md`'s rollback and
+rotate commands, written from the config rather than executed; (3) the `history` variant at 390×844, where
+a long material name and a ₹ amount share one row.

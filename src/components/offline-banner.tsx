@@ -26,15 +26,23 @@ export function OfflineBanner() {
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
-    setOnline(navigator.onLine);
-
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
+
+    /*
+      The events only fire on a *change*, so a page loaded while already
+      offline would never hear one — hence an explicit first read. On a
+      macrotask rather than synchronously in the effect body: a synchronous
+      setState here cascades an extra render before paint on every route,
+      since this sits in `AppShell`.
+    */
+    const first = setTimeout(() => setOnline(navigator.onLine), 0);
 
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
 
     return () => {
+      clearTimeout(first);
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };

@@ -31,6 +31,23 @@ export function expiredAuctionWhere(now: Date = new Date()) {
   return { status: "ACTIVE" as const, endTime: { lte: now } };
 }
 
+/**
+ * Has this deadline passed?
+ *
+ * Lives here rather than inline as `endTime.getTime() <= Date.now()` in a page,
+ * for two reasons. It is the same `lte` boundary as the sweep and as
+ * `submitBid` guard 4, so it belongs beside them; and React's compiler lint
+ * rejects an impure call like `Date.now()` in a component body, which is a fair
+ * complaint even in a Server Component — the value is request-scoped, not
+ * render-scoped, and burying it in JSX invites someone to memoise a screen
+ * around a clock reading.
+ */
+export function isPastDeadline(endTime: Date | string, now: Date | number = Date.now()): boolean {
+  const end = typeof endTime === "string" ? new Date(endTime).getTime() : endTime.getTime();
+  const from = typeof now === "number" ? now : now.getTime();
+  return end <= from;
+}
+
 /** The same rule as a predicate, for tests and for any future in-memory use. */
 export function shouldClose(auction: ClosableAuction, now: Date | number = Date.now()): boolean {
   if (auction.status !== "ACTIVE") return false;
