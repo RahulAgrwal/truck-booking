@@ -20,7 +20,17 @@ This is the part worth understanding before changing anything.
 | Value | How it travels | Why |
 |---|---|---|
 | `NEXT_PUBLIC_FIREBASE_*` (4), `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | **build args** | Next.js inlines them into the browser bundle, so they must exist at build time. They ship to every visitor by design and are defended by Firebase rules and HTTP-referrer restrictions |
+| `NEXT_PUBLIC_SITE_URL` (Secret Manager: `PUBLIC_SITE_URL`) | **build arg** | Not sensitive — it is the app's own origin. It is a build arg for the inlining reason above, **not** because it is secret. Making it a runtime `--set-secrets` var would not work: the compiler has already frozen the fallback into the bundle |
 | `DATABASE_URL`, `DIRECT_URL`, `FIREBASE_ADMIN_*` (3), `GOOGLE_MAPS_SERVER_API_KEY`, `CRON_SECRET` | **runtime**, via `--set-secrets` | A build arg is recoverable from image layers forever. These are mounted when the container starts and never enter the image |
+
+**If `PUBLIC_SITE_URL` is unset the build still succeeds** — `metadata.ts` falls back to
+`http://localhost:3000`. Nothing errors; every `og:image`, `twitter:image` and canonical URL just
+resolves against localhost, so social previews silently render nothing. Check it after a deploy:
+
+```bash
+curl -s https://YOUR-SERVICE-URL/login | grep -o '<meta property="og:image" content="[^"]*"'
+# must print your real origin, not localhost
+```
 
 `GOOGLE_MAPS_SERVER_API_KEY` is deliberately absent from `availableSecrets` so it cannot be passed as a
 build arg even by accident. **`NEXT_PUBLIC_` is an instruction to publish the value, not a naming style** —

@@ -66,10 +66,22 @@ create_secret FIREBASE_ADMIN_PROJECT_ID  "your-firebase-project"
 create_secret FIREBASE_ADMIN_CLIENT_EMAIL "firebase-adminsdk-xxxx@your-project.iam.gserviceaccount.com"
 
 # --- Google Maps ---
-# Client key: restrict by HTTP referrer + Places API only. Ships in the browser bundle.
+# Client key: ships in the browser bundle. Restrict by HTTP referrer, and under
+# API restrictions allow exactly three: Maps JavaScript API, Places API (New),
+# Routes API. Places API (New) is a different SKU from the legacy Places API —
+# with only the legacy one enabled, address autocomplete returns
+# PERMISSION_DENIED and the form silently degrades to a plain text box.
 create_secret GOOGLE_MAPS_API_KEY        "AIza..."
 # Server key: restrict to the Distance Matrix API (and by IP if you can). NEVER public.
 create_secret GOOGLE_MAPS_SERVER_API_KEY "AIza..."
+
+# --- Public site origin ---
+# Not a secret — it is the app's own URL. It lives here so every deploy-time value
+# is configured in one place. Delivered as a --build-arg, never --set-secrets:
+# NEXT_PUBLIC_* is inlined during `next build`, so a runtime value arrives too late
+# and every og:image and canonical URL would resolve against localhost.
+# No trailing slash.
+create_secret PUBLIC_SITE_URL "https://truckinggo-xxxxx.a.run.app"
 
 # --- Cron bearer token ---
 create_secret CRON_SECRET "$(openssl rand -hex 32)"

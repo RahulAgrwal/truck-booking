@@ -3,12 +3,22 @@
 #   gcloud builds submit --config cloudbuild.yaml .
 #
 # Every secret comes from Google Secret Manager. Nothing sensitive is committed,
-# passed as a substitution, or baked into an image layer. Only the five NEXT_PUBLIC_*
-# client keys (4 Firebase + the Maps Places key) are build-time values — Next.js
-# inlines them into the browser bundle, so they are public by design.
+# passed as a substitution, or baked into an image layer. Only the six NEXT_PUBLIC_*
+# values (4 Firebase + the Maps Places key + the site URL) are build-time values —
+# Next.js inlines them into the browser bundle, so they are public by design.
 #
 # GOOGLE_MAPS_SERVER_API_KEY is deliberately absent from availableSecrets: it is a
 # runtime-only secret and must never enter an image layer.
+#
+# PUBLIC_SITE_URL is the odd one out: it is not sensitive at all — it is the app's
+# own public origin. It lives in Secret Manager anyway so that every deploy-time
+# value is configured in one place, and because Cloud Build has no other clean way
+# to inject a per-environment value without committing it as a substitution.
+#
+# It MUST be delivered as a --build-arg, not via --set-secrets. NEXT_PUBLIC_* is
+# inlined by the compiler during `next build`; mounting it at runtime would leave
+# the baked-in fallback (http://localhost:3000) in the bundle and every OG and
+# canonical URL would point at localhost.
 #
 # One-time project bootstrap (APIs, Artifact Registry, secrets, IAM): docs/gcp-setup.md
 
@@ -29,6 +39,10 @@ availableSecrets:
       env: NEXT_PUBLIC_FIREBASE_APP_ID
     - versionName: projects/${PROJECT_ID}/secrets/GOOGLE_MAPS_API_KEY/versions/latest
       env: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    # Not a secret — the app's own origin, e.g. https://truckinggo.example.com.
+    # Stored here so the deployed value is configured alongside everything else.
+    - versionName: projects/${PROJECT_ID}/secrets/PUBLIC_SITE_URL/versions/latest
+      env: NEXT_PUBLIC_SITE_URL
     - versionName: projects/${PROJECT_ID}/secrets/DIRECT_URL/versions/latest
       env: DIRECT_URL
 
@@ -43,6 +57,7 @@ steps:
       - NEXT_PUBLIC_FIREBASE_PROJECT_ID
       - NEXT_PUBLIC_FIREBASE_APP_ID
       - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      - NEXT_PUBLIC_SITE_URL
     args:
       - -c
       - |
@@ -54,6 +69,7 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$$NEXT_PUBLIC_FIREBASE_PROJECT_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$$NEXT_PUBLIC_FIREBASE_APP_ID" \
           --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="$$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" \
+          --build-arg NEXT_PUBLIC_SITE_URL="$$NEXT_PUBLIC_SITE_URL" \
           -t "$$IMAGE:$SHORT_SHA" -t "$$IMAGE:latest" .
 
   # 2. Push both tags.

@@ -26,19 +26,28 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time, so they
-# must be present here. These four Firebase keys ship to the browser anyway — they
-# are not confidential. Server secrets (DATABASE_URL, FIREBASE_ADMIN_*, CRON_SECRET)
-# must NEVER be build args: they would be baked into image layers.
+# must be present here. The four Firebase keys and the Maps *client* key ship to
+# the browser anyway — they are not confidential. Server secrets (DATABASE_URL,
+# FIREBASE_ADMIN_*, GOOGLE_MAPS_SERVER_API_KEY, CRON_SECRET) must NEVER be build
+# args: they would be baked into image layers.
+#
+# NEXT_PUBLIC_SITE_URL is not sensitive either — it is the app's own origin, and it
+# is here rather than at runtime for the same inlining reason. Without it the
+# `metadataBase` in src/lib/design/metadata.ts falls back to http://localhost:3000
+# and every og:image, twitter:image and canonical URL resolves against localhost,
+# which silently breaks every social preview.
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
 ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
 ARG NEXT_PUBLIC_FIREBASE_APP_ID
 ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY \
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
     NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID \
     NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID \
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 # Prisma needs a syntactically valid URL to generate. Never connected to.
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"

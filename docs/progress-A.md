@@ -345,6 +345,41 @@ on-screen keyboard open beneath an expanded map; (3) collapse-then-reopen bills 
 (4) the OG card was verified as *tags in the served HTML*, not against a real scraper (Slack, WhatsApp,
 X), and `og:url` resolves to localhost until `NEXT_PUBLIC_SITE_URL` is set in the deployed environment.
 
+## `PUBLIC_SITE_URL` wired through Secret Manager (user directive)
+
+`NEXT_PUBLIC_SITE_URL` now comes from a Secret Manager secret named **`PUBLIC_SITE_URL`**, added to
+`availableSecrets`, the build step's `secretEnv`, a `--build-arg`, and matching `ARG`/`ENV` lines in
+the Dockerfile. `docs/gcp-setup.md` and `docs/deploy.md` updated.
+
+**It has to be a build arg, not `--set-secrets`.** `NEXT_PUBLIC_*` is inlined by the compiler during
+`next build`; a value mounted at container start arrives after the bundle has already frozen the
+`http://localhost:3000` fallback. This is the one case where "put it in Secret Manager" and "mount it
+at runtime" are not the same decision.
+
+It is also **not actually a secret** — it is the app's own public origin. It lives in Secret Manager
+so every deploy-time value is configured in one place, and that reasoning is written into
+`cloudbuild.yaml` so nobody later concludes it was misclassified.
+
+### A dev-only symptom that looks exactly like a bug
+
+With the value set locally, `og:url` picked it up immediately but `og:image` and `twitter:image` stayed
+`http://localhost:3000/opengraph-image`. It survived a clean dev restart, and it did **not** follow
+`Host` or `X-Forwarded-Host`, so it was not a cache artifact or a proxy-header issue.
+
+**It is dev-only.** Verified against a real production build (`npm run build` + `npm run start`) with
+the variable set: both resolve to `https://truckinggo.example.com/opengraph-image`. `next dev` freezes
+the file-convention image origin at localhost regardless of `metadataBase`. Worth knowing before
+someone spends an afternoon on it — **this cannot be verified in dev at all**, only in a production
+build.
+
+**NOT VERIFIED (`PUBLIC_SITE_URL`):** (1) no Cloud Build run — the yaml parses and the wiring is
+symmetric across `cloudbuild.yaml`/`Dockerfile`, but `--build-arg` reaching `next build` through the
+real pipeline is unproven; (2) the secret does not exist in the project yet, and Cloud Build **fails
+the whole build** on a missing `availableSecrets` entry rather than skipping it, so
+`gcloud secrets create PUBLIC_SITE_URL` must happen before the next deploy; (3) the Cloud Build
+service account needs `roles/secretmanager.secretAccessor` on the new secret like the others;
+(4) verified with a placeholder origin, not the real Cloud Run URL.
+
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
 
