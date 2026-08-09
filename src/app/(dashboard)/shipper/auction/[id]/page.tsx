@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { BidCard } from "@/components/bid-card";
 import { MobileNav } from "@/components/mobile-nav";
 import { PollingRefresher } from "@/components/polling-refresher";
@@ -59,20 +59,8 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
   return (
     <>
       <TopAppBar
-        title={
-          <span className="font-headline-lg text-headline-lg tracking-tight text-primary">
-            TruckingGO
-          </span>
-        }
-        trailing={
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="flex h-touch-target-min w-touch-target-min items-center justify-center rounded-full text-primary active:opacity-80"
-          >
-            <Icon name="notifications" />
-          </button>
-        }
+        title={<Wordmark />}
+        trailing={<NotificationBell />}
       />
 
       <AppScreen className="gap-stack-lg">

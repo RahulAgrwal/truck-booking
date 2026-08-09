@@ -1,12 +1,17 @@
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { MobileNav } from "@/components/mobile-nav";
 import { Skeleton, SkeletonBlock } from "@/components/ui/skeleton";
 
-/** Auction-details loading state (§7.5): summary card, then the bid list. */
+/**
+ * Auction-details loading state (§7.5): summary card, then the bid list.
+ *
+ * The bar matches `page.tsx` exactly — wordmark and bell, no avatar, since the
+ * detail screen does not show one.
+ */
 export default function ShipperAuctionLoading() {
   return (
     <>
-      <TopAppBar title="TruckingGO" />
+      <TopAppBar title={<Wordmark />} trailing={<NotificationBell />} />
 
       <AppScreen className="gap-stack-lg">
         <SkeletonBlock variant="card" lines={4} />

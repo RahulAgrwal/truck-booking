@@ -1,4 +1,4 @@
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { AuctionCard, type AuctionCardData } from "@/components/auction-card";
 import { Fab } from "@/components/fab";
 import { MobileNav } from "@/components/mobile-nav";
@@ -65,22 +65,8 @@ export default async function ShipperDashboardPage() {
     <>
       <TopAppBar
         leading={<Avatar src={session.profileImage} name={session.name} size="sm" />}
-        title={
-          <span className="font-headline-lg text-headline-lg tracking-tight text-primary">
-            TruckingGO
-          </span>
-        }
-        trailing={
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="flex h-touch-target-min w-touch-target-min items-center justify-center rounded-full text-primary active:opacity-80"
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              notifications
-            </span>
-          </button>
-        }
+        title={<Wordmark />}
+        trailing={<NotificationBell />}
       />
 
       <AppScreen>

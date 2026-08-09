@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { getSession, homePathFor } from "@/lib/session";
@@ -53,25 +54,34 @@ export default async function LoginPage() {
 }
 
 /**
- * Inline wordmark. The Stitch screen used a hosted PNG; an inline SVG avoids a
- * network round-trip on the first screen users ever see, and it inherits the
- * brand tokens instead of baking them into a raster.
+ * The product logo — the truck-and-road lockup from the Stitch project's
+ * "TruckingGO Logo" screen, which the Splash & Login screen renders as its one
+ * piece of branding.
+ *
+ * This replaces a hand-built stand-in (a Material Symbols truck in an orange
+ * tile, plus the wordmark as text). The stand-in was chosen to avoid a network
+ * round-trip to Stitch's CDN and to inherit the brand tokens; serving the real
+ * mark from `public/` keeps the first point — it is same-origin, 6KB, and
+ * `priority` puts it in the initial payload — and gives up the second, which
+ * the mark cannot honour anyway: its navy is part of the artwork, not a token.
+ * Same exemption the Google "G" already has (progress-A.md, V6).
+ *
+ * No text wordmark beneath it: the lockup contains one, and Stitch shows the
+ * image alone. The alt text carries the name for screen readers.
+ *
+ * The asset is the Stitch original with its baked `#f3f7fa` background keyed to
+ * alpha and the margin trimmed — as a flat JPEG it sat a shade darker than our
+ * `surface` `#f7f9fb` and read as a faint box.
  */
 function TruckMark() {
   return (
-    <div className="flex flex-col items-center gap-stack-sm">
-      <div className="w-32 h-32 rounded-lg bg-primary-container flex items-center justify-center shadow-[0_4px_12px_rgba(0,33,83,0.08)]">
-        <span
-          className="material-symbols-outlined text-on-primary-container"
-          style={{ fontSize: "72px", fontVariationSettings: "'FILL' 1" }}
-          aria-hidden="true"
-        >
-          local_shipping
-        </span>
-      </div>
-      <span className="font-headline-lg text-headline-lg text-primary tracking-tight">
-        TruckingGO
-      </span>
-    </div>
+    <Image
+      src="/logo.png"
+      alt="TruckingGO"
+      width={415}
+      height={112}
+      priority
+      className="h-auto w-64 max-w-full"
+    />
   );
 }

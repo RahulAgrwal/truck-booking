@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { MobileNav } from "@/components/mobile-nav";
 import { ErrorState } from "@/components/ui/empty-state";
 
@@ -29,7 +29,12 @@ export default function CarrierFeedError({
 
   return (
     <>
-      <TopAppBar title="TruckingGO" />
+      {/*
+        No `leading` avatar: there is no session to draw one from, and a pulsing
+        placeholder on a screen that has finished — in failure — would claim
+        something is still on its way. The wordmark and bell are the page's own.
+      */}
+      <TopAppBar title={<Wordmark />} trailing={<NotificationBell />} />
 
       <AppScreen>
         <ErrorState

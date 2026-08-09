@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Icon } from "./ui/icon";
 import { OfflineBanner } from "./offline-banner";
 
 /**
@@ -82,6 +83,63 @@ export function TopAppBar({
         {trailing ? <div className="flex shrink-0 items-center gap-stack-sm">{trailing}</div> : null}
       </div>
     </header>
+  );
+}
+
+/**
+ * The brand wordmark, as it appears in the top app bar (Stitch: `headline-lg`,
+ * `text-primary`, `tracking-tight`).
+ *
+ * It exists as a component because it must be **byte-identical** on every
+ * surface that shows it — page, `loading.tsx` and `error.tsx` alike. It was
+ * previously inlined on the pages and passed to `TopAppBar` as the plain string
+ * `"TruckingGO"` on the loading/error screens, which silently took the string
+ * branch below and rendered the brand at `headline-md`/`on-surface`: 20px dark
+ * grey, then snapping to 24px orange when the data landed.
+ *
+ * Pass the wordmark, never the string. `title` as a string is for screen names
+ * ("My Bids", "Profile"), which are supposed to be `headline-md`.
+ */
+export function Wordmark() {
+  return (
+    <span className="font-headline-lg text-headline-lg tracking-tight text-primary">TruckingGO</span>
+  );
+}
+
+/**
+ * The app bar's trailing bell. Same reasoning as `Wordmark` — it was missing
+ * from every loading and error bar, so it popped into existence on load.
+ *
+ * 48px rather than the Stitch mockup's 40px: §3.1 puts a floor under every
+ * touch target and the mockup is below it. The glyph is unchanged.
+ */
+export function NotificationBell() {
+  return (
+    <button
+      type="button"
+      aria-label="Notifications"
+      className="flex h-touch-target-min w-touch-target-min items-center justify-center rounded-full text-primary active:opacity-80"
+    >
+      <Icon name="notifications" />
+    </button>
+  );
+}
+
+/**
+ * Stands in for the `Avatar` on screens that have no session to draw it from —
+ * i.e. `loading.tsx`. Its only job is to occupy exactly the 32px that
+ * `<Avatar size="sm">` will occupy, so the wordmark does not slide 40px right
+ * when the real avatar arrives.
+ *
+ * Deliberately not used on `error.tsx`: a pulsing placeholder on a screen that
+ * has finished (in failure) would claim something is still on its way.
+ */
+export function AvatarPlaceholder() {
+  return (
+    <span
+      className="inline-block h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-container-high"
+      aria-hidden="true"
+    />
   );
 }
 

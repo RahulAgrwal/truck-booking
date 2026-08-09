@@ -1,10 +1,9 @@
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { AuctionCard, type AuctionCardData } from "@/components/auction-card";
 import { MobileNav } from "@/components/mobile-nav";
 import { PollingRefresher } from "@/components/polling-refresher";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Icon } from "@/components/ui/icon";
 import {
   EXPIRING_SOON_MS,
   HIGH_WEIGHT_KG,
@@ -92,20 +91,8 @@ export default async function CarrierFeedPage({
     <>
       <TopAppBar
         leading={<Avatar src={session.profileImage} name={session.name} size="sm" />}
-        title={
-          <span className="font-headline-lg text-headline-lg tracking-tight text-primary">
-            TruckingGO
-          </span>
-        }
-        trailing={
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="flex h-touch-target-min w-touch-target-min items-center justify-center rounded-full text-primary active:opacity-80"
-          >
-            <Icon name="notifications" />
-          </button>
-        }
+        title={<Wordmark />}
+        trailing={<NotificationBell />}
       />
 
       <AppScreen>

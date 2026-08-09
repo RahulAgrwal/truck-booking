@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { AppScreen, TopAppBar } from "@/components/app-shell";
+import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { MobileNav } from "@/components/mobile-nav";
 import { ErrorState } from "@/components/ui/empty-state";
 
@@ -27,7 +27,7 @@ export default function ShipperAuctionError({
 
   return (
     <>
-      <TopAppBar title="TruckingGO" />
+      <TopAppBar title={<Wordmark />} trailing={<NotificationBell />} />
 
       <AppScreen>
         <ErrorState
