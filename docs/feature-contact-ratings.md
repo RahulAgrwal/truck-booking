@@ -139,7 +139,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A3` | `[x]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
 | `A5` | `[x]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `auction-card.tsx`, `carrier/bids`, `profile/page.tsx` | history + profile verified in-browser · My Bids hint reasoned only (needs a CARRIER session) |
-| `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
+| `A6` | `[~]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
 
 **Deadlock check.** `B1`→`B2` need nothing from A; `A0` and `A1` need nothing from B. By the time Lane A
 finishes `A2`, `B3` and `B6` have landed. Neither chain can stall on the other.
