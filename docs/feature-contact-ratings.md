@@ -99,7 +99,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 
 | Step | Status | Title | Gate | Files | Notes |
 |---|---|---|---|---|---|
-| `B1` | `[ ]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | |
+| `B1` | `[~]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | claimed, building now |
 | `B2` | `[ ]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/review.ts` | **unblocks 4 Lane A steps — push the moment it compiles** |
 | `B3` | `[ ]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | opens `A4` |
 | `B4` | `[ ]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
