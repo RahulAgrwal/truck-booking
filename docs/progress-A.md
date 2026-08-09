@@ -380,8 +380,82 @@ the whole build** on a missing `availableSecrets` entry rather than skipping it,
 service account needs `roles/secretmanager.secretAccessor` on the new secret like the others;
 (4) verified with a placeholder origin, not the real Cloud Run URL.
 
+## Feature: contact exchange + mutual ratings — Lane A is now FRONTEND
+
+New user directive, this session. The lane boundary is **re-drawn horizontally** for this feature:
+**Lane A = frontend (`src/app/**`, `src/components/**`), Lane B = backend + migration
+(`prisma/**`, `src/lib/**`)**. The board, contracts and step tables are in
+[`docs/feature-contact-ratings.md`](./feature-contact-ratings.md) — read that, not this section, to work
+the feature. This entry only records what Lane A shipped and what it could not check.
+
+Scope: both roles store contact details (mobile + address; carrier also truck number + type; shipper also
+company name), revealed to the counterparty **only once a bid is accepted**; plus mutual 1–5 star ratings,
+one per completed job, with the **carrier's rating visible to the shipper while deciding** — on every bid
+row and inside the accept-bid sheet.
+
+### Shipped
+
+| Step | Commit | What |
+|---|---|---|
+| `A0` | `ee914b8` | The feature board + the contracts Lane A codes against |
+| `A1` | `7894189` | `rating-stars.tsx`, `star-rating-input.tsx`, `carrier-reputation.tsx` |
+| — | `b574ce1` | `sheet.tsx` scroll-lock fix, pulled forward out of `A4` |
+
+### Three decisions worth keeping
+
+**`RatingStars` renders no stars at all when nobody has rated.** Five grey stars read as a zero-star
+rating, which is a claim about a carrier we have no basis for — "unrated" and "rated badly" are different
+facts, and a new carrier should not look like a bad one.
+
+**`StarRatingInput` is built on native `<input type="radio">`**, not `role="radio"` buttons and a roving
+tabindex. Arrow-key navigation and the screen-reader announcement come free, and an `sr-only` input under
+a 48px `<label>` is what makes each target a square rather than a 16px glyph.
+
+**All three components are prop-driven and import nothing from `src/lib/`.** They are rendered inside the
+accept-bid sheet, which is `"use client"` — a presentational component that reaches into a server read
+model cannot be. The side effect is that `A1` had no real gate and was taken before `B2` landed.
+Consequence for Lane B, recorded on the board: **`starBreakdown` moved out of the planned `reviews.ts`**
+into `rating-stars.tsx`. Rounding to half-stars is presentation; `4.8` is the fact.
+
+### The `add -A` hazard is real, and it fired
+
+Both lanes are in **one checkout**, `D:\Truck-booking`. While staging `A1`, `git status` showed
+`prisma/schema.prisma` modified — Claude 2 mid-`B1`. `git add -A` would have committed their half-written
+migration inside my component commit. Explicit paths every time; there is no version of this that is safe
+to shortcut.
+
+Related: `git pull --rebase` **fails outright** while the other lane has unstaged work
+(`cannot pull with rebase: You have unstaged changes`). Do **not** `git stash` to get past it — that
+pockets their work. Push first, reconcile after; or wait for their commit.
+
+**NOT VERIFIED (A0/A1 + sheet fix):** nothing rendered. `typecheck` and `lint` are green and there is no
+test for any of it yet.
+Most likely to be wrong, in order:
+1. **The half-star boundaries in `starBreakdown`.** Reasoned, not tested — 4.2 should be four stars and
+   4.3 should be four-and-a-half. If a rating looks rounded the wrong way, it is the `- 0.25` / `- 0.75`
+   pair. A unit test belongs in `A3`, where the first real average renders.
+2. **`star_half` may not be a Material Symbols ligature in the loaded font subset.** If half-stars render
+   as the literal text `star_half`, that is the cause — fall back to `star` at reduced opacity.
+3. **`peer-focus-visible:` on a sibling of an `sr-only` input.** The focus ring is the only keyboard
+   affordance the star picker has; if it does not appear, the picker is invisibly focusable.
+4. **The sheet scroll-lock fix is reasoned, not observed.** `documentElement` is the correct element —
+   that much is settled by the `globals.css` root-cause work — but "the page behind an open sheet does
+   not move on a finger drag" has not been seen. It belongs to the `A6` device sweep.
+5. `tabular-nums` and `text-[16px]`-style sizes on the star glyphs are unverified at 390×844; the star
+   row could wrap on a narrow bid card.
+
+### Blocked
+
+`A2` waits on `B2` (`ContactDetailsSchema`, `updateContactDetails`), `A3` on `B6` (`reviewsFor`),
+`A4` on `B3` (`getDeal`), `A5` on `A4`. Per BuildPlan §1 that is a pull-and-wait, not a question — and
+per the same section, everything ungated was taken first, which is why the `sheet.tsx` fix shipped ahead
+of the step that planned it.
+
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
+
+- 2026-08-09 — `A2`/`A3`/`A4` all waiting on Lane B's `B2` contracts commit. `B1` (schema + migration) is
+  `[x]` on Neon. Nothing ungated remains in Lane A.
 
 ## ⚠ Cross-lane: Claude 2 is working A5 onward (user instruction)
 
