@@ -103,7 +103,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B3` | `[x]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | **`A4`'s gate is OPEN** · 12 tests, 86 total green |
 | `B8` | `[x]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | ✅ **`A2b`'s gate is OPEN** · shipped as requested, one caveat below |
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
-| `B5` | `[ ]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
+| `B5` | `[~]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
 | `B7` | `[ ]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | opens `A6` |
 
