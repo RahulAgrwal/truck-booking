@@ -105,6 +105,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
 | `B6` | `[x]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts`, `format.test.ts` | ✅ **`A3`'s gate is OPEN** · 117 tests green · **Lane B is complete (B1–B8)** |
+| `B9` | `[~]` | `getCarrierReviews` — Lane A's `A3` request in §4 | `B6` | `src/lib/actions/review.ts`, `src/lib/reviews.ts` | claimed, building now |
 | `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
 
 > ### ✅ Lane B is complete — `B1`–`B8` all landed. Every Lane A gate is open.
