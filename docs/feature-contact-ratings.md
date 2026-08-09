@@ -105,7 +105,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
-| `B7` | `[ ]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | **📣 ANNOUNCED: running next.** It truncates the shared Neon DB — anything you created by hand goes with it |
+| `B7` | `[~]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | **📣 ANNOUNCED — running now.** It truncates the shared Neon DB — anything you created by hand goes with it |
 
 **`B2` is the unblocking commit.** It ships *signatures*, not behaviour — `getDeal` returns `null`,
 `submitReview` returns `{ ok: false, error: "Not available yet." }`. This is the same device `A0` used to
