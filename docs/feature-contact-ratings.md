@@ -139,7 +139,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A3` | `[x]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
 | `A5` | `[x]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `auction-card.tsx`, `carrier/bids`, `profile/page.tsx` | history + profile verified in-browser · My Bids hint reasoned only (needs a CARRIER session) |
-| `A6` | `[~]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
+| `A6` | `[x]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | ✅ driven in headless Chrome at 390×844 — see §4d · **one real bug found and fixed** |
 
 **Deadlock check.** `B1`→`B2` need nothing from A; `A0` and `A1` need nothing from B. By the time Lane A
 finishes `A2`, `B3` and `B6` have landed. Neither chain can stall on the other.
@@ -579,6 +579,77 @@ already-rated done state renders from seeded data, but no review has been writte
 `P2002` duplicate path and `router.refresh()` swapping the button for the done state are unproven;
 (3) `StarRatingInput` has never been tapped — the focus ring and the half-star glyphs are still
 theoretical (`A1` note 2/3); (4) the `party.phone === null` fallback is unreachable with seeded data.
+
+---
+
+## 4d. `A6` — the device sweep, driven for real
+
+Headless Chrome over CDP at **390×844, dpr 3, touch emulation on** (the Claude-in-Chrome extension was
+not connected; same approach as the earlier `globals.css` scroll work). Controls were actually operated,
+not inspected.
+
+### One real bug, found and fixed
+
+**Every `Input` had a 12px dead strip top and bottom.** The wrapper is `h-touch-target-min` (48px) and
+centres its children, but the `<input>` was auto-height — 24px. Measured: `elementFromPoint` 6px below the
+border returned the **DIV**, not the input. So a field that looks 48px tall only focused on its middle
+half, and CLAUDE.md §3.1 is about the thing you can hit, not the thing you can see. Fixed with `h-full`
+on the input; re-measured at 46px (48 less borders) with taps 4px from either edge landing on `INPUT`.
+
+This affects **every form in the app**, not just this feature.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Horizontal overflow, 9 routes | **0px everywhere** |
+| Material Symbols webfont | `document.fonts.check` → loaded; `star_half` draws as a glyph |
+| Icon-only controls without an accessible name | **0** |
+| **`submitReview` end to end** | rated Coastal Carriers → "You've rated this job", and the aggregate moved *No ratings yet* → **4.0 (1)**. Review row *and* `ratingSum`/`ratingCount` increment both landed |
+| **`acceptBid` end to end** | accept sheet showed `4.5 (2)` + a real review, accepting flipped the auction to Assigned with a contact card and one `tel:` link |
+| Accept sheet, rendered | slides from the bottom (`fromBottom 0`), 65% of viewport, half-star renders — screenshot in scratch |
+| `StarRatingInput` | tap 4 → **GOOD**, 1 → **TERRIBLE**, 5 → **EXCELLENT**; `checked` follows |
+| Keyboard focus ring | real Tab → `:focus-visible` true, ring `rgb(160,65,0) 0 0 0 2px` = the `primary` token |
+| **`sheet.tsx` scroll lock** | `documentElement.style.overflow = "hidden"`, `scrollBy(0,400)` moved the page **0px**. The §5 fix is now behaviourally proven |
+| `prefers-reduced-motion` | ping animation 1s → **1e-05s** |
+| Onboarding CARRIER branch | "Your truck details", fields `phone/truckNumber/address`, **no** company name, all six `TRUCK_TYPES` chips |
+| My Bids "Contact & rate" | present on **Won**, absent on **Pending** and **Lost** |
+| Carrier won view | `You won this load`, `YOUR SHIPPER`, `tel:+919820011223`, 0px overflow |
+
+### Three "bugs" that were my probes, not the app
+
+Recorded because each one cost time and would cost it again:
+
+1. **"4 stars shows TERRIBLE."** `innerText` includes the `sr-only` per-star labels (`1 stars — Terrible`),
+   so a regex over the whole dialog matches the first one. Read the visible `<p>`, not the subtree.
+2. **"Submit did nothing."** Asserted 3.5s after the tap; a dev-mode `router.refresh()` takes longer.
+   The review *had* been written. Re-navigate and check state rather than racing the refresh.
+3. **"My Bids hint missing."** The class is `uppercase`, so `innerText` returns `CONTACT & RATE` and a
+   search for `Contact & rate` finds nothing. CSS text-transform is applied in `innerText`.
+
+### And one self-inflicted outage
+
+`npx next build` **while `next dev` was running** left `.next` in a state where every route 404'd —
+including `/login`. Not a code fault: `rm -rf .next` and restart fixed it. **Stop the dev server before
+building.**
+
+### Still not verified
+
+- **The `P2002` duplicate-review path.** Unreachable through the UI by design: once you have rated, the
+  button is replaced by the done state. It needs two clients holding the sheet open simultaneously.
+  The unique constraint is what makes it correct; nothing has exercised the friendly message.
+- **A real device.** This is Chrome's mobile emulation — real touch scrolling, iOS rubber-banding and
+  the on-screen keyboard are all still unproven. Emulated touch was enabled but CDP touch synthesis
+  remains unreliable here, so taps were dispatched as mouse events.
+- PWA install (`V7`) — out of this feature's scope.
+
+### Dev-database side effects
+
+`A6` wrote to the shared Neon database, deliberately: **one review** on the Coastal Carriers job, and
+**one accepted bid** — the Mumbai→Pune auction is now `COMPLETED_ASSIGNED` to Singh Logistics rather than
+live. Both are ordinary app actions, both leave the data consistent, and `npm run db:seed` restores the
+fixtures. Flagged because Lane B owns seeding and a live auction quietly becoming assigned is exactly the
+kind of thing that reads as a bug later.
 
 ---
 

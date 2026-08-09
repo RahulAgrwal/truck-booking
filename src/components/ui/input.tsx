@@ -77,7 +77,14 @@ export function Input({
           aria-invalid={error ? true : undefined}
           aria-describedby={error || hint ? messageId : undefined}
           className={cn(
-            "min-w-0 flex-1 bg-transparent font-body-lg text-body-lg text-on-surface",
+            // `h-full` is a tap-target fix, not cosmetics. The wrapper is 48px
+            // and centres its children, so an auto-height input is 24px with a
+            // 12px dead strip above and below it: the field *looks* 48px but a
+            // tap on its top edge hits the wrapper div and focuses nothing.
+            // Measured at 390×844 before the fix — elementFromPoint 6px below
+            // the border returned the DIV. CLAUDE.md §3.1 means the thing you
+            // can actually hit, not the thing you can see.
+            "h-full min-w-0 flex-1 bg-transparent font-body-lg text-body-lg text-on-surface",
             "placeholder:text-on-surface-variant focus:outline-none",
           )}
           {...rest}
