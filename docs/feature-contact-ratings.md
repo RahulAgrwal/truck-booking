@@ -117,7 +117,8 @@ instead of idling behind a backend that is only half written. Push it before `B3
 |---|---|---|---|---|---|
 | `A0` | `[x]` | This board | — | `docs/feature-contact-ratings.md` | |
 | `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
-| `A2` | `[ ]` | Details form + onboarding step 2 + `/profile/details` | `B2` | `(auth)/onboarding/details/**`, `role-cards.tsx`, `(dashboard)/profile/details/**` | |
+| `A2` | `[~]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**`, `role-cards.tsx` | claimed, building now |
+| `A2b` | `[!]` | `/profile/details` edit route | **`B8`** — see the request in §4 | `(dashboard)/profile/details/**` | split out: the edit form needs a prefill read Lane A may not write |
 | `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[ ]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | scroll-lock bug (§5) **already fixed** — pulled forward while blocked on `B2`/`B3` |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
@@ -270,6 +271,36 @@ submitReview(input: unknown): Promise<ActionResult>
 Standard `ActionResult`; never throws for an expected failure (CLAUDE.md §6). `submitReview`'s
 authorization *is* `getDeal(...) === null ⇒ refuse` — you can only review someone you demonstrably
 transacted with.
+
+### 📥 Lane A → Lane B request: `B8` · `getOwnContactDetails`
+
+**Why this is a request and not just something Lane A writes.** The `/profile/details` edit form has to
+prefill with the user's *current* phone, address, truck number and so on. That is own data — the session
+*is* the authorization, and there is no Rule 1 question to answer. So Lane A could simply query it.
+
+It shouldn't, and the reason is the grep in §6. Rule 1 is worth having only if it is **absolute**: any hit
+for `phone` / `truckNumber` / `companyName` under `src/app/` is a bug, no reading required. The moment
+"…except own-profile" becomes a legitimate exception, every future hit needs a human to decide which kind
+it is, and the check stops being a check. One small function in Lane B's tree keeps the rule total.
+
+```ts
+// src/lib/contact.ts — beside getDeal, same module, same reason
+export type OwnContactDetails = {
+  role: Role;
+  phone: string | null;
+  address: string | null;
+  companyName: string | null;
+  truckNumber: string | null;
+  truckType: string | null;
+};
+
+/** The signed-in user's own details, for the edit form's prefill. */
+export async function getOwnContactDetails(userId: string): Promise<OwnContactDetails | null>;
+```
+
+`null` only when the user row is gone. A user who has never filled anything in returns a record of nulls —
+that is an empty form, not an error. **`A2b` is `[!]` until this lands**; `A2` (onboarding step 2) needs no
+prefill and is proceeding without it.
 
 ### Session & routing (`B5`)
 
