@@ -135,6 +135,23 @@ function HistoryAuctionCard({
             </span>
           )}
         </div>
+
+        {/*
+          An assigned load has a carrier's phone number and a rating waiting one
+          tap away. The card already links there, but nothing said so — and a
+          shipper looking for the number they were given at acceptance has no
+          reason to guess that "history" is where it lives.
+
+          Only on assigned rows: an expired auction has no counterparty, so the
+          same hint there would promise a contact that does not exist.
+        */}
+        {assigned ? (
+          <p className="mt-stack-sm flex items-center justify-end gap-1 font-label-bold text-label-bold uppercase tracking-wider text-primary">
+            <Icon name="call" className="text-[14px]" />
+            Contact &amp; rate
+            <Icon name="chevron_right" className="text-[14px]" />
+          </p>
+        ) : null}
       </article>
     </Link>
   );

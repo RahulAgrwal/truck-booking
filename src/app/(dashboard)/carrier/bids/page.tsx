@@ -137,6 +137,20 @@ export default async function MyBidsPage({
                           </span>
                         </div>
                       </div>
+
+                      {/*
+                        A won bid is the one row on this screen with something
+                        to do rather than something to read: the shipper's
+                        number and the rating are a tap away. The row already
+                        links there; this says so.
+                      */}
+                      {bid.status === "ACCEPTED" ? (
+                        <p className="mt-stack-sm flex items-center justify-end gap-1 font-label-bold text-label-bold uppercase tracking-wider text-primary">
+                          <Icon name="call" className="text-[14px]" />
+                          Contact &amp; rate
+                          <Icon name="chevron_right" className="text-[14px]" />
+                        </p>
+                      ) : null}
                     </article>
                   </Link>
                 </li>

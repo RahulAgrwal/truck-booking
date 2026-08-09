@@ -138,7 +138,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A2b` | `[x]` | `/profile/details` edit route + `loading` | `B8` ✅ | `(dashboard)/profile/details/**`, `profile/page.tsx` | rendered 200 with real prefill · thanks for `B8` |
 | `A3` | `[x]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
-| `A5` | `[~]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
+| `A5` | `[x]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `auction-card.tsx`, `carrier/bids`, `profile/page.tsx` | history + profile verified in-browser · My Bids hint reasoned only (needs a CARRIER session) |
 | `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
 
 **Deadlock check.** `B1`→`B2` need nothing from A; `A0` and `A1` need nothing from B. By the time Lane A
@@ -549,6 +549,28 @@ that never rendered proves nothing, and the first attempt at this one *was* that
 body rather than trusting the 200.
 
 `grep -rln "select:" src/app | xargs grep -ln "phone"` → empty. 117 tests green across 9 files.
+
+### `A3` / `A5`, same method
+
+| Screen | Sees | Verdict |
+|---|---|---|
+| `/shipper/auction/[id]` bid rows | `4.5`, `4.0` and *No ratings yet* across three carriers | ✅ |
+| accept sheet props | `carrierRatingSum 9/count 2`, `4/1`, `0/0` serialized to the client | ✅ |
+| `/shipper/history` | 1 assigned row, 1 "Contact & rate" hint, 0 expired rows | ⚠️ half-proven |
+| `/profile` | "Your rating" `5.0 out of 5, 1 rating` + the written review below it | ✅ |
+
+**The history row is deliberately marked half-proven.** The hint appeared exactly once on the one
+assigned row — but this shipper currently has **no `CLOSED_EXPIRED` auction**, so "the hint is absent on
+an expired row" was never actually observed. The code is a one-line ternary and is very probably right;
+it is recorded as reasoned rather than tested because a negative test with no negative case in the
+fixtures proves nothing, and writing it up as ✅ would be the same mistake as trusting a skeleton's 200.
+
+**NOT VERIFIED (A5):** the My Bids "Contact & rate" hint on a won bid — identical one-line ternary to the
+history one, but it needs a CARRIER session and the dev server had already been restarted twice.
+
+**NOT VERIFIED (A3):** the accept sheet has never been **opened**. Its props are correct in the payload,
+but the rendered layout — `RatingStars` at `size="md"` beside the price, and the zero-rating warning copy
+— has not been seen, because `Sheet` returns `null` while closed so none of it reaches the SSR HTML.
 
 **NOT VERIFIED (A4):** (1) nothing at 390×844 — all of the above is `curl`, so the card's layout, the
 plate chip's `tracking-[0.2em]`, and whether the 56px call button and the rate sheet coexist above the
