@@ -1,16 +1,41 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { LocationAutocomplete, type LocationValue } from "@/components/LocationAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
-import { calculateRouteAndCreateAuction } from "@/lib/actions/auction";
+import { calculateRouteAndCreateAuction, previewRoute } from "@/lib/actions/auction";
+import { formatRouteSummary } from "@/lib/design/feed";
 import { AUCTION_DURATIONS_HOURS } from "@/lib/schemas";
 import { cn } from "@/lib/design/cn";
 
+import { RouteMap } from "./route-map";
+
 const EMPTY: LocationValue = { address: "", lat: null, lng: null };
+
+/** What the route strip is showing right now. */
+type RoutePreview =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ready"; distanceKm: number; estimatedTimeMins: number }
+  | { state: "error"; message: string };
+
+/** A resolved lookup, tagged with the coordinate pair it answers. */
+type RouteAnswer = { key: string } & (
+  | { state: "ready"; distanceKm: number; estimatedTimeMins: number }
+  | { state: "error"; message: string }
+);
+
+/** Identifies a pickup/drop-off pair; null until both ends are geocoded. */
+function routeKey(
+  pLat: number | null, pLng: number | null,
+  dLat: number | null, dLng: number | null,
+): string | null {
+  if (pLat === null || pLng === null || dLat === null || dLng === null) return null;
+  return `${pLat},${pLng}|${dLat},${dLng}`;
+}
 
 export function AuctionForm() {
   const router = useRouter();
@@ -20,9 +45,60 @@ export function AuctionForm() {
   const [weight, setWeight] = useState("");
   const [duration, setDuration] = useState<(typeof AUCTION_DURATIONS_HOURS)[number]>(6);
 
+  const [answer, setAnswer] = useState<RouteAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const { lat: pLat, lng: pLng } = pickup;
+  const { lat: dLat, lng: dLng } = dropoff;
+
+  const key = routeKey(pLat, pLng, dLat, dLng);
+
+  /*
+    Resolve the route whenever both ends are geocoded. Keying on the four
+    coordinates rather than the two objects is what keeps this from re-billing:
+    typing in a field nulls its coordinates (LocationAutocomplete does that
+    deliberately), so the lookup only re-runs on an actual new pair.
+
+    Nothing is set synchronously here — "idle" and "loading" are *derived*
+    below, not stored. Storing them would mean a setState in the effect body and
+    a cascading render on every keystroke that clears a coordinate.
+  */
+  useEffect(() => {
+    if (key === null || pLat === null || pLng === null || dLat === null || dLng === null) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const result = await previewRoute({
+        pickupLat: pLat,
+        pickupLng: pLng,
+        dropoffLat: dLat,
+        dropoffLng: dLng,
+      });
+      // A slow lookup must not overwrite a newer pair's answer.
+      if (cancelled) return;
+      setAnswer(
+        result.ok
+          ? { key, state: "ready", ...result.data }
+          : { key, state: "error", message: result.error },
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [key, pLat, pLng, dLat, dLng]);
+
+  // Derived, so a stale answer for a previous pair can never be shown: it is
+  // either the answer to the pair on screen, or we are still waiting for one.
+  const route: RoutePreview =
+    key === null
+      ? { state: "idle" }
+      : answer?.key === key
+        ? answer
+        : { state: "loading" };
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -58,7 +134,22 @@ export function AuctionForm() {
   const errorFor = (name: string) => (fieldError === name && error ? error : undefined);
 
   return (
-    <form onSubmit={handleSubmit} className="contents">
+    /*
+      A real flex column, not `display: contents`.
+
+      `contents` removed the form's box, which had two consequences: AppScreen's
+      `space-y-*` selects `main > * + *` and so only ever saw the <form> — the
+      sections below got no vertical rhythm at all — and a box with no layout
+      cannot carry the bottom padding that clears the sticky footer. Both are
+      fixed by the form simply being a box.
+
+      The bottom padding is a §3.3-sanctioned fixed-bar offset: 16 + 56 (the lg
+      button) + 16 of footer, plus the home indicator, plus a little air.
+    */
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-stack-lg pb-[calc(env(safe-area-inset-bottom,0px)+112px)]"
+    >
       <section className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm">
         <div className="space-y-stack-md">
           <LocationAutocomplete
@@ -81,6 +172,21 @@ export function AuctionForm() {
             error={errorFor("dropoffLocation")}
             required
           />
+          <RouteStrip route={route} />
+
+          {/*
+            Keyed on the pair so a new pickup or drop-off rebuilds the map
+            rather than mutating the old one — cheaper to reason about than
+            diffing renderers, and the effect's cleanup disposes the previous
+            instance. Only mounted once both ends are geocoded.
+          */}
+          {pLat !== null && pLng !== null && dLat !== null && dLng !== null ? (
+            <RouteMap
+              key={key ?? undefined}
+              pickup={{ lat: pLat, lng: pLng }}
+              dropoff={{ lat: dLat, lng: dLng }}
+            />
+          ) : null}
         </div>
       </section>
 
@@ -164,5 +270,54 @@ export function AuctionForm() {
         </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * The inset route readout under the two address fields.
+ *
+ * Renders nothing at all when idle. An empty strip sitting there before either
+ * address is picked would be a promise the form cannot keep yet — the row
+ * appears the moment there is a real answer to put in it.
+ *
+ * `aria-live="polite"` because the value arrives after the shipper has moved on
+ * to the next field; without it the distance changes silently.
+ */
+function RouteStrip({ route }: { route: RoutePreview }) {
+  if (route.state === "idle") return null;
+
+  const isError = route.state === "error";
+
+  return (
+    <div
+      aria-live="polite"
+      className={cn(
+        "flex items-center gap-stack-sm rounded p-3",
+        isError ? "bg-error-container" : "bg-surface-container-low",
+      )}
+    >
+      <span
+        className={cn(
+          "material-symbols-outlined shrink-0",
+          isError ? "text-on-error-container" : "text-on-surface-variant",
+        )}
+        style={{ fontSize: "20px" }}
+        aria-hidden="true"
+      >
+        {isError ? "error" : "route"}
+      </span>
+
+      {route.state === "loading" ? (
+        <span className="font-body-md text-body-md text-on-surface-variant">
+          Calculating distance…
+        </span>
+      ) : route.state === "error" ? (
+        <span className="font-body-md text-body-md text-on-error-container">{route.message}</span>
+      ) : (
+        <span className="font-body-md text-body-md text-on-surface">
+          {formatRouteSummary(route.distanceKm, route.estimatedTimeMins)}
+        </span>
+      )}
+    </div>
   );
 }

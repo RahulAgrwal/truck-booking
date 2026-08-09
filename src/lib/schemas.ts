@@ -47,6 +47,20 @@ export const CreateAuctionSchema = z.object({
 
 export type CreateAuctionInput = z.infer<typeof CreateAuctionSchema>;
 
+/**
+ * Route-preview payload — the create form asking "how far is this?" before the
+ * shipper commits (TechnicalDocument.md §10.2).
+ *
+ * Non-nullable, unlike the create payload: there is nothing to preview until
+ * both ends are geocoded, so the caller simply doesn't ask.
+ */
+export const RoutePreviewSchema = z.object({
+  pickupLat: latitude,
+  pickupLng: longitude,
+  dropoffLat: latitude,
+  dropoffLng: longitude,
+});
+
 /** Accept-bid payload (TechnicalDocument.md §5.4). */
 export const AcceptBidSchema = z.object({
   auctionId: z.string().uuid(),

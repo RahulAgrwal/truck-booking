@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/lib/design/cn";
+import { isMapsConfigured, loadMapsLibrary } from "@/lib/maps-client";
 
 /**
  * Google Places Autocomplete, restricted to India (TechnicalDocument.md §10.3).
@@ -30,6 +31,14 @@ type Suggestion = {
   secondaryText: string;
   /** [start, end) offsets into mainText that matched what the user typed. */
   match: [number, number] | null;
+  /**
+   * The live prediction object, kept so selection can call `toPlace()`.
+   * `new Place({ id })` would also fetch the place, but it starts a *new*
+   * billing session — only `toPlace()` carries the autocomplete session token
+   * through to `fetchFields`, which is what makes the keystrokes bill as one
+   * lookup instead of one each.
+   */
+  prediction: google.maps.places.PlacePrediction;
 };
 
 export type LocationValue = {
@@ -42,37 +51,23 @@ const DEBOUNCE_MS = 250;
 /** Four rows keeps the list clear of the on-screen keyboard at 390×844. */
 const MAX_SUGGESTIONS = 4;
 
-const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-export const isPlacesConfigured = Boolean(apiKey);
+export const isPlacesConfigured = isMapsConfigured;
 
-// ---- Maps JS loader (module-scoped so it runs at most once per page) ----
+/**
+ * The places library, via the shared loader in `@/lib/maps-client` — shared so
+ * this component and the route map inject one `<script>` between them.
+ */
+async function loadPlaces(): Promise<google.maps.PlacesLibrary> {
+  const places = await loadMapsLibrary("places");
 
-declare global {
-  interface Window {
-    google?: typeof google;
+  if (!places?.AutocompleteSuggestion) {
+    // Reached when the key is valid but the *Places API (New)* is not enabled
+    // on the project — the classic Places service is a different SKU and does
+    // not provide this class.
+    throw new Error("Places API (New) is not enabled for this key");
   }
-}
 
-let loader: Promise<void> | null = null;
-
-function loadMaps(): Promise<void> {
-  if (!apiKey) return Promise.reject(new Error("Maps API key is not configured"));
-  if (loader) return loader;
-
-  loader = new Promise<void>((resolve, reject) => {
-    if (window.google?.maps?.places) return resolve();
-
-    const script = document.createElement("script");
-    script.src =
-      `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
-      `&libraries=places&loading=async&region=IN&language=en`;
-    script.async = true;
-    script.onerror = () => reject(new Error("Failed to load the Maps JS API"));
-    script.onload = () => resolve();
-    document.head.appendChild(script);
-  });
-
-  return loader;
+  return places;
 }
 
 // ---- Component ----
@@ -131,12 +126,7 @@ export function LocationAutocomplete({
     }
 
     try {
-      await loadMaps();
-      const places = window.google?.maps?.places;
-      if (!places?.AutocompleteSuggestion) {
-        setDegraded(true);
-        return;
-      }
+      const places = await loadPlaces();
 
       sessionToken.current ??= new places.AutocompleteSessionToken();
 
@@ -162,6 +152,7 @@ export function LocationAutocomplete({
             matchRange && typeof matchRange.startOffset === "number"
               ? [matchRange.startOffset, matchRange.endOffset ?? matchRange.startOffset]
               : null,
+          prediction,
         });
       }
 
@@ -169,8 +160,10 @@ export function LocationAutocomplete({
       setOpen(mapped.length > 0);
       setActiveIndex(-1);
     } catch (cause) {
-      // A missing key, a referrer rejection or billing not enabled all land
-      // here. Degrade to a plain text box rather than trapping the user.
+      // A missing key, a referrer rejection, billing not enabled, or the Places
+      // API (New) being switched off all land here. Degrade to a plain text box
+      // rather than trapping the user — the auction is still creatable, just
+      // without coordinates and therefore without a distance.
       console.error("[LocationAutocomplete]", cause);
       setDegraded(true);
       setOpen(false);
@@ -193,20 +186,19 @@ export function LocationAutocomplete({
     setSuggestions([]);
 
     try {
-      const places = window.google?.maps?.places;
-      if (!places?.Place) {
-        onChange({ address: label, lat: null, lng: null });
-        return;
-      }
-
-      const place = new places.Place({ id: suggestion.placeId });
-      await place.fetchFields({ fields: ["location", "formattedAddress"] });
+      // `toPlace()` rather than `new Place({ id })`: it carries the session
+      // token, so `fetchFields` closes the same autocomplete session the
+      // keystrokes opened instead of billing a fresh Place Details lookup.
+      const place = suggestion.prediction.toPlace();
+      const { place: details } = await place.fetchFields({
+        fields: ["location", "formattedAddress"],
+      });
 
       // The Places response already carries coordinates — a separate Geocoder
       // call here would be a second billable request for data we have.
-      const location = place.location;
+      const location = details.location;
       onChange({
-        address: place.formattedAddress ?? label,
+        address: details.formattedAddress ?? label,
         lat: location?.lat() ?? null,
         lng: location?.lng() ?? null,
       });
@@ -291,7 +283,8 @@ export function LocationAutocomplete({
       */}
       {degraded && value.address.length > 0 ? (
         <p className="mt-stack-sm font-body-md text-body-md text-on-surface-variant">
-          Address suggestions are unavailable — type the city and state.
+          Address suggestions are unavailable — type the city and state. The load can still be
+          posted, but it won&rsquo;t show a distance.
         </p>
       ) : null}
 

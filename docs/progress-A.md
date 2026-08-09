@@ -179,6 +179,110 @@ contradictorily to a screen reader.
 4. `NEXT_PUBLIC_SITE_URL` added to `.env.example` (`c6fd860`).
 
 
+## A4 follow-up — Places autocomplete, live distance, route map (user directive)
+
+Real Maps keys were supplied mid-session, which turned A4's whole `NOT VERIFIED` list from
+speculation into something testable. Three defects and two additions.
+
+### The bug that made autocomplete impossible
+
+`LocationAutocomplete` resolved its loader on `script.onload` and then read
+`window.google.maps.places.AutocompleteSuggestion`. Under `loading=async` the bootstrap defers the
+library payloads, so at `onload` that property is **undefined** — the component set `degraded = true`
+and fell back to a plain text box *with a perfectly valid API key*. It could never have worked.
+
+Fixed in the new `src/lib/maps-client.ts`: resolve on the API's own **`callback=` parameter**, then
+`await google.maps.importLibrary(name)`. Two intermediate attempts are worth recording because the
+first looked right and was not:
+
+1. `onload` → read the namespace. Fails always (the original bug).
+2. `onload` → `importLibrary(...)`. Fails *intermittently* — verified in-browser, console read
+   `window.google.maps.importLibrary is not a function`. `onload` fires before the bootstrap has
+   finished wiring `google.maps`; a second later the function exists, which is what makes this look
+   like a flake rather than a race.
+3. `callback=` → `importLibrary(...)`. Correct. **Verified in-browser**: script injects, library
+   loads, `importLibrary` is a function at first call, no console errors.
+
+### Also fixed
+
+- **`new Place({ id })` → `prediction.toPlace()`.** Only `toPlace()` carries the autocomplete session
+  token into `fetchFields`, so the old code billed every session as a separate Place Details lookup
+  on top of per-keystroke Autocomplete requests. A4's suspect (b) about `fetchFields` shapes was
+  right that this line was wrong, for a different reason than guessed.
+- **The create screen's dead bottom padding.** `page.tsx` passed `className="… pb-[120px]"` to
+  `AppScreen`, which sets its own `pb-[calc(…)]`. Two arbitrary values at equal specificity are
+  resolved by **stylesheet order, not class order** — AppScreen's won, so the page had 24px of
+  clearance under an 89px sticky footer and the last field sat beneath it. Clearance now lives on the
+  form. Measured after the fix: `formPadBottom 112px` vs `footerHeight 89px`.
+- **`<form className="contents">` → a real flex column.** `display: contents` removed the form's box,
+  so `AppScreen`'s `space-y-*` (which selects `main > * + *`) only ever saw the `<form>` and the
+  sections below got **no vertical rhythm at all**. Now `gap-stack-lg`, measured `rowGap: 24px`.
+
+### Added
+
+- `previewRoute` Server Action + `RoutePreviewSchema` — live distance/ETA on the create form once
+  both ends are geocoded. Server-side because Distance Matrix runs on the **server** key. It is a
+  preview only; `calculateRouteAndCreateAuction` still re-resolves the route at submit, because a
+  number the client received is a number the client could have edited.
+- `src/app/(dashboard)/shipper/create/route-map.tsx` — map preview of the route. Placed beside the
+  page, **not** in `src/components/`, which is Lane B's tree (§3). `gestureHandling: "cooperative"`
+  so a one-finger drag scrolls the page instead of panning the map.
+
+### `DirectionsService` is deprecated — the map uses the Routes API
+
+The browser console flagged it during verification: **`google.maps.DirectionsService` was deprecated
+on 25 Feb 2026**, superseded by `google.maps.routes.Route.computeRoutes`. The first cut of
+`route-map.tsx` used `DirectionsService` + `DirectionsRenderer` and logged a deprecation warning on
+every render; it now calls `computeRoutes` and draws the returned `path` itself.
+
+Two knock-on decisions:
+
+- **No marker library.** `DirectionsRenderer` used to supply the A/B markers for free. Its
+  replacements both cost something — `AdvancedMarkerElement` needs a cloud-side Map ID, and
+  `google.maps.Marker` is *also* deprecated — so the endpoints are `SymbolPath.CIRCLE` icons on a
+  zero-opacity polyline. No new config, no second deprecation warning.
+- **Distance Matrix is legacy too** (its modern form is the Routes API's `computeRouteMatrix`). It is
+  not deprecated and it works, so `src/lib/maps.ts` is untouched — but it is the next one to move.
+
+### Google Cloud config — resolved during the session
+
+Probed the live keys directly (`scratchpad/probe-maps.mjs`, statuses only, never the key). First run
+found three APIs blocked by **API restrictions on the client key**; the user enabled them and the
+final state is:
+
+| API | Key | Result |
+|---|---|---|
+| Distance Matrix | server | **OK** — powers the distance strip and the stored value |
+| Maps JavaScript | client | **OK** |
+| Places API (New) | client | **OK** (was `PERMISSION_DENIED`) |
+| Routes | client | **OK** (Directions was `REQUEST_DENIED`; superseded, left disabled) |
+
+The client key needs exactly three: *Maps JavaScript API*, *Places API (New)*, *Routes API*.
+
+### VERIFIED in-browser at 375×667, end to end
+
+- Typing "Mumbai" returns 4 suggestions with the matched substring highlighted, plus the Google
+  attribution row. Selecting one resolves via `toPlace()`/`fetchFields` to `"Mumbai, Maharashtra"`.
+- With both ends picked, the strip reads **`148 km · ~2h 37m`** — real Distance Matrix data through
+  `previewRoute`. Changing the drop-off to Nashik re-resolved to `187 km · ~3h 24m`, so the
+  `key`-based dedupe re-fires on a genuine change and not otherwise.
+- The map draws the **road route** in `#ff6b00` with endpoint dots, 180px tall, 9 tiles.
+- Before the Routes API was enabled, the same flow fell through to the dashed straight line and the
+  "Showing a direct line" caption without throwing — so **both** branches are proven, not just the
+  happy one.
+- **Scrolling:** 1106px of content in a 667px viewport. At `scrollY === maxScroll` the last paragraph
+  bottoms out 47px **above** the sticky footer. Before the fix the page had 24px of clearance under
+  an 89px footer.
+- `npm run build` exit 0; `typecheck`, `lint`, and 74 tests green.
+
+**NOT VERIFIED (A4 follow-up):** (1) nothing was tested at a true 390×844 — verification ran at
+375×667, so the map's 180px box and the four-row suggestion list have not been checked against the
+on-screen keyboard on a real device; (2) the form was never actually **submitted** — the create path
+still has A4's original unverified line, so a real auction has not been written with coordinates and
+a distance; (3) `previewRoute` bills one Distance Matrix element per pickup/drop-off change, which
+the dedupe bounds but no test pins; (4) the `Route.computeRoutes` failure branch was proven while the
+API was *disabled*, not while it was enabled-but-erroring.
+
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
 

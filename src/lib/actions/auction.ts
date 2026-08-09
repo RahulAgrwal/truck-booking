@@ -5,8 +5,14 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
-import { resolveRoute } from "@/lib/maps";
-import { AcceptBidSchema, CreateAuctionSchema, firstIssue, type ActionResult } from "@/lib/schemas";
+import { resolveRoute, type Route } from "@/lib/maps";
+import {
+  AcceptBidSchema,
+  CreateAuctionSchema,
+  RoutePreviewSchema,
+  firstIssue,
+  type ActionResult,
+} from "@/lib/schemas";
 import { tonsToKg } from "@/lib/format";
 
 /**
@@ -22,6 +28,42 @@ class AuctionNoLongerActiveError extends Error {
     super("Auction is no longer ACTIVE");
     this.name = "AuctionNoLongerActiveError";
   }
+}
+
+/**
+ * Driving distance and time between two geocoded points, for display on the
+ * create form before the shipper commits.
+ *
+ * This exists as a Server Action rather than a client-side Distance Matrix call
+ * for one reason: the key. Distance Matrix runs on GOOGLE_MAPS_SERVER_API_KEY,
+ * which must never reach the browser (CLAUDE.md §9) — so the browser asks the
+ * server, and the server holds the key.
+ *
+ * It is a **preview**, not the stored value. `calculateRouteAndCreateAuction`
+ * re-resolves the route server-side at submit, because a number the client
+ * received is a number the client could have edited.
+ *
+ * Billing note: Distance Matrix charges per element, so the caller must only
+ * ask when both ends are geocoded and the pair has actually changed.
+ */
+export async function previewRoute(input: unknown): Promise<ActionResult<Route>> {
+  await requireRole("SHIPPER");
+
+  const parsed = RoutePreviewSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, ...firstIssue(parsed.error) };
+
+  const { pickupLat, pickupLng, dropoffLat, dropoffLng } = parsed.data;
+
+  const route = await resolveRoute(
+    { lat: pickupLat, lng: pickupLng },
+    { lat: dropoffLat, lng: dropoffLng },
+  );
+
+  // A failed preview is not a failed form. The caller shows the message beside
+  // the route and leaves the submit button enabled (§10.5).
+  if (!route.ok) return { ok: false, error: route.error };
+
+  return { ok: true, data: route.data };
 }
 
 /**

@@ -35,7 +35,13 @@ export default async function CreateAuctionPage() {
         </div>
       </header>
 
-      <AppScreen hasNav={false} className="space-y-stack-lg pb-[120px]">
+      {/*
+        No `pb-*` in this className. AppScreen already sets one, and a second
+        arbitrary `pb-[…]` at equal specificity is decided by stylesheet order,
+        not by which class is written last — the page's lost, so the form ran
+        under the sticky footer. Footer clearance lives on the form itself now.
+      */}
+      <AppScreen hasNav={false}>
         <AuctionForm />
       </AppScreen>
     </>
