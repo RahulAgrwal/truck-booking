@@ -606,7 +606,8 @@ Run before every commit, both lanes — these cost nothing and catch what a buil
 
 ```bash
 # Rule 1, the check that matters: no Prisma select for a contact column outside src/lib/contact.ts
-grep -rln "select:" src/app | xargs grep -ln "phone"     # expect: nothing
+grep -rln "select:" src/app | xargs grep -ln "\bphone\b"     # expect: nothing
+#                                              ^^        ^^  word boundaries are load-bearing — see below
 
 # Broader sweep. NOT expected to be empty — see the allowlist below.
 grep -rn "truckNumber\|companyName\|\bphone\b" src/app src/components
@@ -627,6 +628,16 @@ So the second grep is a **sweep to eyeball, not a gate**, and its allowlist is:
 
 Anything else is a bug. The **first** grep is the unambiguous one and stays "expect nothing": the leak
 would come from a page issuing its own `select`, and that is precisely what it catches.
+
+> **The word boundaries in the first grep are load-bearing.** Without them it fired on
+> `src/app/(dashboard)/profile/page.tsx` after `A5` — not a leak, but the Material Symbols ligature
+> **`contact_phone`** on the "Contact details" row, sitting in the same file as an unrelated
+> `select: raterSelect`. `_` is a word character to grep, so `\bphone\b` excludes `contact_phone` while
+> still catching a real `phone: true`.
+>
+> Worth fixing rather than tolerating: this check exists to be run before every commit by two agents, and
+> the fastest way to make a security grep useless is to let it cry wolf until someone starts skimming past
+> it. Two `\b`s buy back the whole signal.
 
 Plus the existing CLAUDE.md §10.1 list (no `GOOGLE_MAPS_SERVER_API_KEY` in client-reachable code, no
 `NEXT_PUBLIC_` on a server secret, no secret value committed).

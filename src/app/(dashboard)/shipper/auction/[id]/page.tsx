@@ -190,6 +190,7 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
                         <AcceptBidSheet
                           auctionId={auction.id}
                           bidId={row.id}
+                          carrierId={row.carrier.id}
                           carrierName={row.carrier.name}
                           amount={row.amount}
                           isBest={row.id === bestId}

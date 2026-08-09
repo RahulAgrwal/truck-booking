@@ -31,6 +31,7 @@ export function CarrierReputation({
   average,
   count,
   reviews,
+  showSummary = true,
   className,
 }: {
   /** `null` when nobody has rated this carrier yet. */
@@ -38,18 +39,29 @@ export function CarrierReputation({
   count: number;
   /** Newest first, already capped by the caller. May be empty. */
   reviews: ReviewSummary[];
+  /**
+   * Draw the "Carrier rating ★★★★☆" line.
+   *
+   * `false` where the caller already shows the score — the accept sheet puts
+   * it in its summary box, beside the price, and prints it the instant the
+   * sheet opens rather than waiting on the comment fetch. Repeating it here
+   * would be the same number twice, arriving at two different times.
+   */
+  showSummary?: boolean;
   className?: string;
 }) {
   const withComment = reviews.filter((review) => review.comment !== null);
 
   return (
     <section className={cn("flex flex-col gap-stack-sm", className)}>
-      <div className="flex items-center justify-between gap-stack-sm">
-        <span className="font-label-bold text-label-bold uppercase tracking-wider text-on-surface-variant">
-          Carrier rating
-        </span>
-        <RatingStars average={average} count={count} size="md" />
-      </div>
+      {showSummary ? (
+        <div className="flex items-center justify-between gap-stack-sm">
+          <span className="font-label-bold text-label-bold uppercase tracking-wider text-on-surface-variant">
+            Carrier rating
+          </span>
+          <RatingStars average={average} count={count} size="md" />
+        </div>
+      ) : null}
 
       {/*
         Not an error state and not an empty list to apologise for — a new

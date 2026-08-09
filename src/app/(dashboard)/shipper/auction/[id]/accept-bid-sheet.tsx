@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
+import { CarrierReputation, type ReviewSummary } from "@/components/carrier-reputation";
 import { RatingStars } from "@/components/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { acceptBid } from "@/lib/actions/auction";
+import { getCarrierReviews } from "@/lib/actions/review";
 import { cn } from "@/lib/design/cn";
 import { formatINR, ratingAverage } from "@/lib/format";
 
@@ -28,11 +30,13 @@ export function AcceptBidSheet({
   carrierName,
   amount,
   isBest,
+  carrierId,
   carrierRatingSum,
   carrierRatingCount,
 }: {
   auctionId: string;
   bidId: string;
+  carrierId: string;
   carrierName: string;
   amount: number;
   isBest: boolean;
@@ -44,6 +48,35 @@ export function AcceptBidSheet({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [reviews, setReviews] = useState<ReviewSummary[] | null>(null);
+
+  /*
+    Fetch the carrier's recent comments **when the sheet opens**, not with the
+    page.
+
+    The page mounts `PollingRefresher`, which re-runs every server read on this
+    route once every 7 seconds while the auction is live. Prefetching three
+    reviews for each of N bidding carriers would therefore be 3N queries every
+    7s, forever, to populate sheets that mostly never open. One query per actual
+    open is the proportionate shape (board §4, request `B9`).
+
+    Failure is silent on purpose: the rating and the price are already on
+    screen, so a comment list that could not load must not turn a working
+    accept flow into an error state.
+  */
+  useEffect(() => {
+    if (!open || reviews !== null) return;
+
+    let cancelled = false;
+    void getCarrierReviews({ carrierId }).then((result) => {
+      if (cancelled) return;
+      setReviews(result.ok ? result.data : []);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, reviews, carrierId]);
 
   function confirm() {
     setError(null);
@@ -146,6 +179,16 @@ export function AcceptBidSheet({
             This carrier hasn&apos;t completed a job through TruckingGO yet — there&apos;s no track
             record to go on.
           </p>
+        ) : reviews !== null ? (
+          <CarrierReputation
+            average={ratingAverage(carrierRatingSum, carrierRatingCount)}
+            count={carrierRatingCount}
+            reviews={reviews}
+            // The score is already in the summary box above, and it got there
+            // without waiting for this fetch.
+            showSummary={false}
+            className="mt-stack-md"
+          />
         ) : null}
       </Sheet>
     </>
