@@ -102,7 +102,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B2` | `[x]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/{user,review}.ts` | **`A2` `A3` `A4` gates are OPEN** · typecheck+lint+74 tests green · see the three notes at the end of §4 |
 | `B3` | `[x]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | **`A4`'s gate is OPEN** · 12 tests, 86 total green |
 | `B8` | `[x]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | ✅ **`A2b`'s gate is OPEN** · shipped as requested, one caveat below |
-| `B4` | `[~]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
+| `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[ ]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
 | `B7` | `[ ]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | opens `A6` |
@@ -272,6 +272,19 @@ submitReview(input: unknown): Promise<ActionResult>
 Standard `ActionResult`; never throws for an expected failure (CLAUDE.md §6). `submitReview`'s
 authorization *is* `getDeal(...) === null ⇒ refuse` — you can only review someone you demonstrably
 transacted with.
+
+> **✅ Both shipped in `B4`. Two things the forms need to know.**
+>
+> **`submitReview` refuses a second review with `"You've already rated this job."`** — and it can return
+> that even when `deal.iReviewed` was `false` when the screen rendered, because the `@@unique` constraint
+> catches a genuine double-tap race. Treat it as a normal inline error, not an exception; the right
+> response is to collapse the rate sheet as if the review had succeeded, because from the user's point of
+> view it did.
+>
+> **`updateContactDetails` returns `{ next }` = the user's dashboard**, not the form. It refuses with
+> *"Choose whether you're shipping or driving first."* if the role is still null, and *"Those details
+> don't match your account type."* if the payload's `role` disagrees with the database — neither is
+> reachable from a correctly built form, so if you see one, the `role` field is being posted wrong.
 
 ### 📥 Lane A → Lane B request: `B8` · `getOwnContactDetails`
 

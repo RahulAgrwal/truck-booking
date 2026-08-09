@@ -642,7 +642,7 @@ by what would hurt most if wrong:
 | B2 | `[x]` | Contracts + typed stubs | | **`A2` `A3` `A4` gates OPEN** · typecheck+lint+74 tests green |
 | B3 | `[x]` | Visibility rule | | **`A4` gate OPEN** · 12 new tests, 86 total green |
 | B8 | `[x]` | `getOwnContactDetails` (Lane A request) | | **`A2b` gate OPEN** |
-| B4 | `[ ]` | Actions | | |
+| B4 | `[x]` | Actions | | `updateContactDetails` + `submitReview` real |
 | B5 | `[ ]` | Session gate | | |
 | B6 | `[ ]` | Read model | | |
 | B7 | `[ ]` | Seed fixtures | | |
@@ -795,3 +795,71 @@ form still returns a record of nulls, which is the empty-form case they asked fo
 it is a keyed `findUnique` with no rule in it. Never executed. Most likely to be wrong: nothing in the
 query; the risk is entirely in the `null` contract above being read as "row missing" by `A2b` and
 rendering a blank form to a user who should have been redirected.
+
+## B4 notes — the two Server Actions
+
+Both bodies real. Standard `ActionResult`, no throwing for expected failures, and the CLAUDE.md §3.2
+opening triple — `requireSession` → role/authorization guard → zod — in that order in both.
+
+### `submitReview` — its authorization *is* Rule 1
+
+`getDeal(auctionId, session.userId) === null ⇒ refuse`. There is deliberately **no second permission model
+here**: the same query that decides whether you may see someone's phone number decides whether you may
+review them, so the two cannot drift. Keyed on `session.userId`, never on anything the client sent.
+
+Note the asymmetry, because it is the thing to get wrong: Rule 1 gates who may *write* a review. It never
+gates who may read one. A star average is public the moment it exists (§2, Rule 2).
+
+**The row and the aggregate are written in one `$transaction`.** That is the entire justification for
+trusting `ratingSum`/`ratingCount`: "the aggregate equals the sum of the rows" is not a claim needing
+periodic reconciliation, it is a property of every write. `increment` rather than read-modify-write, or two
+people rating the same carrier in the same instant would lose one of the two ratings.
+
+**Double submit is handled twice, on purpose.** `deal.iReviewed` produces the friendly message; the
+`@@unique([auctionId, authorId])` constraint is what actually guarantees it, and the `P2002` catch turns
+the loser of a genuine race into the same friendly message. Because the insert is *inside* the
+transaction, the loser's increment rolls back with it — the aggregate cannot double-count.
+
+`revalidatePath` is **deliberately not exhaustive**. A star average appears on every bid row in the app, so
+the only complete invalidation would be the whole tree; the five paths listed are the ones a reviewer or
+subject looks at next, and everything else is dynamic and polls, so it self-corrects within a refresh.
+
+### `updateContactDetails` — the payload picks the shape, the database picks the identity
+
+`ContactDetailsSchema` is discriminated on `role`, but that discriminator is **checked against the
+database**, not trusted. A carrier submitting a shipper payload is refused rather than quietly writing
+`companyName` onto a carrier row.
+
+Against the *database* and not the session, specifically: a session is a snapshot and can be minutes old.
+That read pays for itself twice, because it also carries `detailsCompletedAt`, which decides whether this
+save is the first completion or an edit — **an edit must not move the timestamp**, or the column stops
+meaning what its name says.
+
+Only the fields belonging to the user's role are written. The other role's columns are left alone rather
+than nulled: nothing reads them, and blanking them would destroy data if roles ever became mutable.
+
+`revalidatePath("/", "layout")` — the whole tree, because `B5` puts `detailsComplete` in the session and
+every guard in the app therefore changes on this write. The one place the blunt instrument is right.
+
+### Why there are no tests for these two
+
+Consistent with the rest of the repo: `submitBid` and `acceptBid` have none either. A Server Action here is
+`requireSession` + guards + Prisma, so a unit test would be a test of three mocks agreeing with each other.
+The *rules* are tested where they are pure — `contact.test.ts` covers the authorization these actions
+delegate to, and `bids.test.ts` / `auction-close.test.ts` cover the others. What is genuinely untested is
+the plumbing, and that needs a database, which is `B7` plus a browser.
+
+**NOT VERIFIED (B4):** `typecheck` / `lint` / `test` (86, 8 files) green. **Neither action has ever run.**
+Ranked by what would hurt most if wrong:
+
+1. **`Prisma.PrismaClientKnownRequestError` narrowing.** Imported as a *value* from
+   `@/generated/prisma/client`, which typechecks — but if Prisma 7 wraps errors differently through the
+   `pg` driver adapter, the `instanceof` silently fails and a double-submit shows "Could not save your
+   review" instead of the friendly message. Reproduce by submitting two reviews for one auction.
+2. **The `$transaction` array form with `increment`.** If the increment lands but the create rolls back —
+   or vice versa — the aggregate diverges permanently, and nothing recomputes it. Worth checking the row
+   count against `ratingCount` in Studio once after `B7`.
+3. **`detailsCompletedAt` staying put across an edit.** Save the details form twice and confirm the
+   timestamp does not move.
+4. **The role-mismatch branch**, which no UI can reach — it needs the action called directly with a
+   `role: "SHIPPER"` payload from a carrier session.

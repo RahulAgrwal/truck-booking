@@ -13,7 +13,12 @@ import {
   homePathFor,
   requireSession,
 } from "@/lib/session";
-import { SetUserRoleSchema, firstIssue, type ActionResult } from "@/lib/schemas";
+import {
+  ContactDetailsSchema,
+  SetUserRoleSchema,
+  firstIssue,
+  type ActionResult,
+} from "@/lib/schemas";
 
 /**
  * Exchange a Firebase ID token for an HttpOnly session cookie, upserting the
@@ -92,16 +97,66 @@ export async function setUserRole(input: unknown): Promise<ActionResult<{ next: 
 }
 
 /**
- * Save the contact details collected at onboarding step 2, and later editable
- * at `/profile/details` (docs/feature-contact-ratings.md §4).
+ * Save the contact details collected at onboarding step 2, and later edited at
+ * `/profile/details` (docs/feature-contact-ratings.md §4).
  *
- * STUB — `B4` implements it. `A2` builds its form against this signature; the
- * `next` it will return is where the user goes once details are complete,
- * which is their dashboard, not back to the form.
+ * These are the columns the whole contact-exchange feature exists to hand over,
+ * so the role branch is decided by the **database**, not by the payload: the
+ * client picks which shape it is submitting, and the server checks that shape
+ * against who the user actually is. A carrier posting a shipper payload is
+ * refused rather than quietly writing `companyName` onto a carrier row.
  */
 export async function updateContactDetails(input: unknown): Promise<ActionResult<{ next: string }>> {
-  void input;
-  return { ok: false, error: "Not available yet." };
+  const session = await requireSession();
+
+  const parsed = ContactDetailsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, ...firstIssue(parsed.error) };
+
+  /*
+    Read before write, and it earns the round trip twice: `role` is the
+    authority the payload is checked against (a session is a snapshot and can
+    be minutes old), and `detailsCompletedAt` decides whether this save is the
+    first completion or an edit.
+  */
+  const current = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, detailsCompletedAt: true },
+  });
+
+  if (!current) return { ok: false, error: "Your account no longer exists." };
+  if (current.role === null) {
+    return { ok: false, error: "Choose whether you're shipping or driving first." };
+  }
+
+  const details = parsed.data;
+  if (details.role !== current.role) {
+    return { ok: false, error: "Those details don't match your account type." };
+  }
+
+  // Only the fields belonging to this role are written. The other role's
+  // columns are left untouched rather than nulled: nothing reads them for this
+  // user, and blanking them would destroy data if a role ever became mutable.
+  const roleFields =
+    details.role === "SHIPPER"
+      ? { companyName: details.companyName }
+      : { truckNumber: details.truckNumber, truckType: details.truckType };
+
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: {
+      phone: details.phone,
+      address: details.address,
+      ...roleFields,
+      // Stamp the *first* completion only. An edit must not move it, or the
+      // column stops meaning what its name says.
+      ...(current.detailsCompletedAt === null ? { detailsCompletedAt: new Date() } : {}),
+    },
+  });
+
+  // The session carries detailsComplete, so the whole tree's guards change.
+  revalidatePath("/", "layout");
+
+  return { ok: true, data: { next: homePathFor(current.role) } };
 }
 
 /** Clear the cookie and revoke refresh tokens, so the session dies everywhere. */
