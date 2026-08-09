@@ -444,12 +444,64 @@ Most likely to be wrong, in order:
 5. `tabular-nums` and `text-[16px]`-style sizes on the star glyphs are unverified at 390×844; the star
    row could wrap on a narrow bid card.
 
-### Blocked
+### Shipped (continued) — `A2` through `A5` complete
 
-`A2` waits on `B2` (`ContactDetailsSchema`, `updateContactDetails`), `A3` on `B6` (`reviewsFor`),
-`A4` on `B3` (`getDeal`), `A5` on `A4`. Per BuildPlan §1 that is a pull-and-wait, not a question — and
-per the same section, everything ungated was taken first, which is why the `sheet.tsx` fix shipped ahead
-of the step that planned it.
+| Step | Commit | What |
+|---|---|---|
+| `A2` | `18a9add` | Onboarding step 2 — `DetailsForm`, shared with the edit screen |
+| `A2b` | `0c8a79d` | `/profile/details` + `loading`, prefilled from Lane B's `getOwnContactDetails` |
+| `A4` | `ddad8a4` | `ContactCard`, `ReviewSheet`, wired into both auction detail screens |
+| `A3` | `23845a6`, `2cb3bf4` | Carrier rating on bid rows and in the accept sheet; recent reviews fetched on open |
+| `A5` | `cb084c5` | "Contact & rate" on assigned/won rows; profile reputation block |
+| — | `99f2da7` | **Cross-lane fix: empty `NEXT_PUBLIC_SITE_URL` was 500ing every route** |
+
+`npm run build` ✓ (16 routes) · `typecheck` ✓ · `lint` ✓ · **119 tests** ✓ · Rule 1 grep clean.
+
+### Four things this cost, worth not paying twice
+
+**1. `??` is not `||`, and the blast radius was the whole app.** `metadata.ts` had
+`process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"`, and `.env.local` carries `=""`. `??` falls
+back only on null/undefined, so `new URL("")` threw — at module scope in the **root layout's** import
+graph, which turned one unset-looking variable into a 500 on `/login`, `/`, and everything else. It had
+been sitting there; nothing in this feature caused it. Found by curling the app for the first time.
+
+**2. A long-running `next dev` keeps a stale Prisma client across a migration.** After `B1`,
+`/onboarding/details` failed with `Unknown field 'detailsCompletedAt'` while `typecheck` passed and the
+on-disk client had 45 references to it. Both true: `postinstall` regenerates the client on disk, the
+running server does not reload it. **Green typecheck + runtime "Unknown field" = restart the dev server.**
+I re-read my own code twice before checking that.
+
+**3. A 200 is not a render.** `/profile/details` returned 200 with the right `<h1>` and no form —
+`loading.tsx` streams its shell before the body resolves, so the negative check "no phone number on this
+page" would have passed against a page that never rendered. Every negative assertion here is now paired
+with a positive one on the same fetch (`40 text nodes of real content`, *then* zero `tel:` links).
+
+**4. Explicit `git add` paths do not protect a file both lanes edit.** They stop you staging the *other*
+lane's files — that worked, `prisma/schema.prisma` stayed out of my commit twice. But the shared board is
+one file, and Claude 2's `git add docs/feature-contact-ratings.md` swept up my uncommitted edits into
+their commit. Harmless here; worth knowing before something less harmless.
+
+### NOT VERIFIED — the `A6` worklist
+
+Everything above is `curl` against the dev server. **Nothing has been seen at 390×844, and no control has
+been operated.** In rough order of how likely it is to be wrong:
+
+1. **No form has ever been submitted.** `updateContactDetails` and `submitReview` are real (Lane B `B4`)
+   and typecheck, but neither has run. Specifically unproven: the `P2002` "already rated" path, and
+   `router.refresh()` swapping the rate button for the done state.
+2. **The accept sheet has never been opened**, so `RatingStars size="md"` beside the price, the
+   zero-rating warning copy, and the fetch-on-open comment list are unrendered. `Sheet` returns `null`
+   while closed, so none of it reaches the SSR HTML.
+3. **`StarRatingInput` has never been tapped.** The `peer-focus-visible:` ring on a sibling of an
+   `sr-only` input is the specific unknown, and it is the picker's only keyboard affordance.
+4. **`star_half` may not exist in the loaded Material Symbols subset** — half-stars would render as the
+   literal text `star_half`. Every average seen so far (5.0, 4.0) rounds to whole stars, so the half
+   branch has genuinely never drawn.
+5. The `sheet.tsx` scroll-lock fix — correct element, unobserved behaviour.
+6. `/onboarding/details` **CARRIER branch** (truck number + truck-type `ChipRow`) — the dev server reads
+   `DEV_BYPASS_ROLE` at startup and I would not restart another lane's process a third time.
+7. My Bids "Contact & rate" hint, and "hint absent on an expired row" — both one-line ternaries, neither
+   observed against a matching fixture.
 
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
