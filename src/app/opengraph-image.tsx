@@ -8,8 +8,15 @@ import { colors } from "@/lib/design/tokens";
 /**
  * The social card — Next's `opengraph-image` file convention, so it is
  * generated at build time and wired into `og:image` and `twitter:image`
- * automatically (it takes precedence over the entries in
- * `src/lib/design/metadata.ts`).
+ * automatically.
+ *
+ * ⚠ **It does NOT take precedence over `src/lib/design/metadata.ts`** — the
+ * opposite is true. An explicit `openGraph.images` in the metadata export wins,
+ * and the file convention only fills in when that key is absent. This comment
+ * claimed otherwise, and while it did, `metadata.ts` listed
+ * `/icons/og-image.jpg` (512×512) with `twitter:card: "summary"` — so this card
+ * was generated, served at `/opengraph-image`, and referenced by nothing.
+ * If you add `images` back to `metadata.ts`, this file goes dark again.
  *
  * Rendered with `next/og`, which ships inside Next and needs no new dependency.
  * It supplies its own font, so nothing is fetched at build time either — worth

@@ -5,11 +5,17 @@ import { useEffect, useRef, useState } from "react";
 import { loadMapsLibrary } from "@/lib/maps-client";
 
 /**
- * A small map preview of the load's route, shown once both ends are geocoded.
+ * A small map preview of a load's route between two geocoded points.
  *
- * Lives beside the create page rather than in `src/components/` because that
- * tree belongs to Lane B (BuildPlan.md §3) — the same reason
- * `LocationAutocomplete` needed an explicit carve-out. Nothing else uses it.
+ * OWNERSHIP: this file sits in Lane B's `src/components/**` tree but is owned by
+ * **Lane A** (BuildPlan.md §3), the same carve-out that covers
+ * `LocationAutocomplete.tsx` — Lane A owns the Maps feature end to end (§10,
+ * `maps.ts`, `maps-client.ts`).
+ *
+ * It started out beside the shipper's create form, which was correct while only
+ * that screen used it. The carrier's bid screen now shows the same route behind
+ * a disclosure, and one copy of the deprecation handling and the WebGL teardown
+ * is worth more than avoiding a line of ownership paperwork.
  *
  * Uses the *client* key via `@/lib/maps-client`. The distance shown to the user
  * does not come from here: it comes from the `previewRoute` Server Action, so

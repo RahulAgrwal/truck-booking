@@ -132,7 +132,10 @@ src/lib/firebase/**
 src/lib/actions/user.ts  src/lib/actions/auction.ts
 src/lib/format.ts                      (currency, weight, dates)
 src/lib/maps.ts                        (Distance Matrix — SERVER key only)
+src/lib/maps-client.ts                 (Maps JS loader — CLIENT key only)
 src/components/LocationAutocomplete.tsx   ← CARVE-OUT: inside Lane B's tree, owned by A
+src/components/route-map.tsx              ← CARVE-OUT: same
+src/components/route-map-disclosure.tsx   ← CARVE-OUT: same
 docs/progress-A.md  docs/cloud-scheduler.md  docs/deploy.md  docs/gcp-setup.md
 docs/LANE.md          (gitignored — per-checkout, written by whichever agent owns the checkout)
 TechnicalDocument.md  §1–§5, §9
@@ -169,9 +172,19 @@ your ledger.
   These are the **only** two files Lane A ever creates outside its own tree, they exist solely so `npm run
   build` passes before B0 lands, and **B0 overwrites both wholesale** — Lane B does not merge with or
   preserve anything in them. After A0, Lane A never touches either file again.
-- **`src/components/LocationAutocomplete.tsx`** — the one file inside `src/components/**` that Lane A owns.
-  It is used only by the shipper's create-auction form (A4); gating A4 on a Lane B step would serialise the
-  lanes for nothing. **Lane B must not create or edit it.** See TechnicalDocument.md §10.3.
+- **The three Maps components inside `src/components/**` that Lane A owns** —
+  `LocationAutocomplete.tsx`, `route-map.tsx`, `route-map-disclosure.tsx`. **Lane B must not create or
+  edit them.** See TechnicalDocument.md §10.3.
+
+  `LocationAutocomplete.tsx` was the original carve-out: used only by the shipper's create-auction form
+  (A4), and gating A4 on a Lane B step would have serialised the lanes for nothing.
+
+  The two `route-map*` files joined it later, when the carrier's bid screen grew a "View route"
+  disclosure and the map stopped being shipper-only. They live here rather than being duplicated into
+  each route folder because one copy of the `computeRoutes` deprecation handling and the WebGL teardown
+  is worth more than avoiding a line of ownership paperwork. The organising principle for all three is
+  the same: **Lane A owns the Maps feature end to end** — §10, `maps.ts`, `maps-client.ts`, the keys,
+  and anything that talks to Google.
 - **`package.json`** — Lane A owns it, but **a dependency must never block Lane B.** Waiting for "Lane A's
   next step boundary" is a hard serialisation point between two agents that are supposed to run in
   parallel, and it can idle a lane for an entire step.

@@ -65,6 +65,20 @@ export const siteMetadata: Metadata = {
     email: false,
   },
 
+  /*
+    No `images` here, deliberately — `src/app/opengraph-image.tsx` supplies it.
+
+    The precedence runs the opposite way to what that file's comment used to
+    claim: an explicit `openGraph.images` **wins over** the file convention, it
+    does not lose to it. So while these keys listed `/icons/og-image.jpg`, the
+    generated 1200×630 card was built, served at `/opengraph-image`, and then
+    referenced by nothing — every share rendered the 512×512 square instead.
+    Verified against the served HTML: `og:image` pointed at the .jpg with
+    `og:image:width 512`.
+
+    Omitting `images` lets the file convention fill in `og:image`,
+    `twitter:image` and the correct 1200×630 dimensions on its own.
+  */
   openGraph: {
     type: "website",
     siteName: title,
@@ -72,21 +86,15 @@ export const siteMetadata: Metadata = {
     description,
     url: "/",
     locale: "en_IN",
-    images: [
-      {
-        url: "/icons/og-image.jpg",
-        width: 512,
-        height: 512,
-        alt: "TruckingGO",
-      },
-    ],
   },
 
   twitter: {
-    card: "summary",
+    // `summary` is the small square card. The generated card is a 1.91:1
+    // banner, which is what `summary_large_image` is for — with `summary` it
+    // would be centre-cropped to a square and the wordmark would be cut off.
+    card: "summary_large_image",
     title,
     description,
-    images: ["/icons/og-image.jpg"],
   },
 
   // Only /login is reachable without a session; everything else redirects.

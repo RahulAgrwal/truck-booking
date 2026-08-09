@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { PollingRefresher } from "@/components/polling-refresher";
+import { RouteMapDisclosure } from "@/components/route-map-disclosure";
 import { Timer } from "@/components/timer";
 import { Icon } from "@/components/ui/icon";
 import { isPastDeadline } from "@/lib/auction-close";
@@ -40,6 +41,12 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
       shipperId: true,
       distanceKm: true,
       estimatedTimeMins: true,
+      // Coordinates for the route map. Nullable like every route field
+      // (§10.5) — the disclosure below simply does not render without all four.
+      pickupLat: true,
+      pickupLng: true,
+      dropoffLat: true,
+      dropoffLng: true,
       // The price to beat: the global minimum across all carriers.
       bids: { orderBy: { amount: "asc" }, take: 1, select: { amount: true } },
     },
@@ -61,6 +68,16 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
   */
   const expired = auction.status !== "ACTIVE" || isPastDeadline(auction.endTime);
   const lowestBid = auction.bids[0]?.amount ?? null;
+
+  /*
+    All four or none. A map drawn from a half-geocoded auction would be a
+    confident picture of something we do not know — and the route Fact above
+    already says "Distance unavailable" in that case, so nothing is lost by
+    omitting the control entirely rather than showing one that cannot work.
+  */
+  const { pickupLat, pickupLng, dropoffLat, dropoffLng } = auction;
+  const mappable =
+    pickupLat !== null && pickupLng !== null && dropoffLat !== null && dropoffLng !== null;
 
   return (
     <>
@@ -125,6 +142,22 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
             </Fact>
           </div>
         </div>
+
+        {/*
+          Collapsed by default so the ₹ input and the sticky Submit CTA stay
+          above the fold, and so no Maps call is made until a carrier asks for
+          the picture (§10.5). No `key` — the coordinates are immutable for a
+          given auction, and a changing key would rebuild the map on every 7s
+          poll, leaking a WebGL context each time.
+        */}
+        {mappable ? (
+          <div className="mb-stack-lg">
+            <RouteMapDisclosure
+              pickup={{ lat: pickupLat, lng: pickupLng }}
+              dropoff={{ lat: dropoffLat, lng: dropoffLng }}
+            />
+          </div>
+        ) : null}
 
         {expired ? (
           <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-error-container p-stack-md text-center">

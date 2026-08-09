@@ -283,6 +283,68 @@ a distance; (3) `previewRoute` bills one Distance Matrix element per pickup/drop
 the dedupe bounds but no test pins; (4) the `Route.computeRoutes` failure branch was proven while the
 API was *disabled*, not while it was enabled-but-erroring.
 
+## ⚠ Cross-lane: Lane A edited Lane B files for the carrier route map (user directive)
+
+CLAUDE.md §3 says never edit the other lane's files. This did, on explicit user direction, so it is
+recorded loudly rather than done quietly — same treatment as the Claude-2 entry below.
+
+**Lane B files touched:** `src/app/(dashboard)/carrier/auction/[id]/page.tsx` (four coordinate fields
+added to the `select`, plus the disclosure), `src/lib/design/metadata.ts` (the OG fix below), and two
+new files under `src/components/`.
+
+**This is new scope, not a fix.** TechnicalDocument §10.4 enumerates four surfaces for route data and
+specifies a distance *string* at each; no map is specified for the carrier anywhere in §10 or the PRD,
+which calls that card a "Minimal summary of the route". The distance string was already correct on
+both carrier surfaces before this change.
+
+### Why a disclosure and not an inline map
+
+- **The CTA stays above the fold.** Measured before the change: *Submit Bid* bottoms out at 651px in a
+  667px viewport and the page does not scroll at all. The 180px map inline would have pushed it under.
+- **§10.5 says "never recompute on read."** Always-on would be one `Route.computeRoutes` per carrier
+  per load browsed. Behind a tap it costs a call only when someone wants the picture — **verified: with
+  the disclosure collapsed there is no `truckinggo-maps-js` script in the DOM and `window.google` is
+  `undefined`**, so an unopened bid screen costs nothing.
+- **The feed is deliberately excluded.** Its query has no `take:`, so N maps per render is exactly what
+  §10.5 forbids.
+
+### Ownership: `route-map.tsx` moved into the carve-out
+
+`src/app/(dashboard)/shipper/create/route-map.tsx` → `src/components/route-map.tsx`, joining
+`LocationAutocomplete.tsx` as a Lane A carve-out inside Lane B's tree, together with the new
+`route-map-disclosure.tsx`. BuildPlan §3 updated. Duplicating it per route folder would have meant two
+copies of the `computeRoutes` deprecation handling and the WebGL teardown to keep in sync.
+
+### Polling does not remount the map
+
+The bid screen polls `router.refresh()` every 7s. That reconciles rather than remounts, so the map
+initialises once — **verified by stamping the `<canvas>` and its container and confirming both
+survived a 9s window spanning a poll, `sameCanvasNode === true`**, with the half-typed ₹ amount intact.
+The two things that would break it are a per-render `key` (not passed — coordinates are immutable for a
+given auction) and object-identity effect deps (already destructured to primitives). Get either wrong
+and it is a new WebGL context every 7 seconds.
+
+### Bug found and fixed: the generated OG card was referenced by nothing
+
+`src/app/opengraph-image.tsx` renders a 1200×630 card and its own comment claimed it "takes precedence
+over the entries in `src/lib/design/metadata.ts`". **That is backwards** — an explicit
+`openGraph.images` wins and the file convention only fills in when the key is absent. `metadata.ts`
+listed `/icons/og-image.jpg` with `twitter:card: "summary"`, so every share rendered a 512×512 square
+while the real card sat unreferenced at `/opengraph-image`.
+
+Confirmed against the served HTML before the fix — `og:image` pointed at the .jpg with
+`og:image:width 512` — and after: `og:image` is `/opengraph-image`, 1200×630, `summary_large_image`,
+with the generated alt text. The misleading comment was corrected in place so it cannot cause a
+regression twice.
+
+**NOT VERIFIED (carrier map):** (1) the null-coordinate branch — `mappable` is typechecked and the guard
+is trivial, but no row with a null coordinate was rendered, so the "disclosure absent, distance string
+still present" case is reasoned, not seen; (2) 375×667 only, never a true 390×844, and never with an
+on-screen keyboard open beneath an expanded map; (3) collapse-then-reopen bills a second
+`computeRoutes` — accepted trade-off, but nothing bounds a carrier toggling it repeatedly;
+(4) the OG card was verified as *tags in the served HTML*, not against a real scraper (Slack, WhatsApp,
+X), and `og:url` resolves to localhost until `NEXT_PUBLIC_SITE_URL` is set in the deployed environment.
+
 ## Blockers log
 _`<timestamp> — waiting on <gate>; re-checking in 60s`_
 

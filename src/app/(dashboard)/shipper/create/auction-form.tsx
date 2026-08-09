@@ -9,9 +9,8 @@ import { Input, Textarea } from "@/components/ui/input";
 import { calculateRouteAndCreateAuction, previewRoute } from "@/lib/actions/auction";
 import { formatRouteSummary } from "@/lib/design/feed";
 import { AUCTION_DURATIONS_HOURS } from "@/lib/schemas";
+import { RouteMap } from "@/components/route-map";
 import { cn } from "@/lib/design/cn";
-
-import { RouteMap } from "./route-map";
 
 const EMPTY: LocationValue = { address: "", lat: null, lng: null };
 
