@@ -35,7 +35,7 @@ export function EmptyState({
       )}
     >
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container-high">
-        <Icon name={icon} className="text-3xl text-on-surface-variant" />
+        <Icon name={icon} className="text-icon-xl text-on-surface-variant" />
       </span>
 
       <div className="flex flex-col gap-stack-sm">
@@ -80,7 +80,7 @@ export function ErrorState({
   return (
     <div className="flex flex-col items-center justify-center gap-stack-md px-margin-mobile py-stack-lg text-center">
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-error-container">
-        <Icon name="error" className="text-3xl text-on-error-container" />
+        <Icon name="error" className="text-icon-xl text-on-error-container" />
       </span>
 
       <div className="flex flex-col gap-stack-sm">

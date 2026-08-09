@@ -92,7 +92,7 @@ export function Timer({
         aria-live="off"
         aria-label={ariaLabel}
       >
-        <Icon name="schedule" className="text-[16px]" />
+        <Icon name="schedule" className="text-icon-md" />
         <span className="font-timer-md text-timer-md" suppressHydrationWarning>
           {label}
         </span>

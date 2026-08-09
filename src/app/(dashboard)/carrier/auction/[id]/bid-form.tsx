@@ -144,7 +144,7 @@ export function BidForm({
             id="bid-hint"
             className="mt-stack-sm flex items-center gap-1 font-body-md text-body-md text-secondary"
           >
-            <Icon name="trending_down" className="text-[16px] text-tertiary" />
+            <Icon name="trending_down" className="text-icon-md text-tertiary" />
             {lowestBid === null ? (
               "Be the first to bid"
             ) : (
@@ -166,7 +166,7 @@ export function BidForm({
       {/* Sticky footer: the CTA has to stay in the thumb zone with the numeric keypad open. */}
       <div className="fixed bottom-0 left-0 z-50 w-full border-t border-outline-variant bg-surface-container-lowest px-margin-mobile pt-stack-sm pb-safe shadow-[0_-4px_16px_rgba(0,34,80,0.1)]">
         <div className="mb-stack-sm flex items-center justify-center gap-1 text-error">
-          <Icon name="warning" filled className="text-[16px]" />
+          <Icon name="warning" filled className="text-icon-md" />
           <p className="font-label-bold text-label-bold uppercase tracking-wide">
             Bids cannot be canceled once submitted
           </p>
@@ -195,7 +195,7 @@ export function BidForm({
           </div>
         }
       >
-        <div className="flex flex-col gap-stack-sm rounded-lg bg-surface-container-low p-stack-md">
+        <div className="flex flex-col gap-stack-sm rounded-lg bg-surface-container-low p-gutter-mobile">
           <Row label="Your bid" value={valid ? formatINR(parsedAmount) : "—"} emphasis />
           <Row label="Route" value={`${pickupLocation} → ${dropoffLocation}`} />
           {lowestBid !== null ? (

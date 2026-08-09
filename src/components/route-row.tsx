@@ -36,7 +36,7 @@ export function RouteRow({
           <Icon
             name="radio_button_checked"
             filled
-            className="z-10 bg-surface-container-lowest text-[20px] text-primary"
+            className="z-10 bg-surface-container-lowest text-icon-lg text-primary"
           />
           {/*
             Dashed rail. A repeating linear-gradient rather than a border-dashed
@@ -50,7 +50,7 @@ export function RouteRow({
           <Icon
             name="location_on"
             filled
-            className="z-10 mt-auto bg-surface-container-lowest text-[20px] text-secondary"
+            className="z-10 mt-auto bg-surface-container-lowest text-icon-lg text-secondary"
           />
         </div>
 

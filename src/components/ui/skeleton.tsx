@@ -46,7 +46,7 @@ export function SkeletonBlock({
     return (
       <div
         className={cn(
-          "bg-surface-container-lowest border border-surface-variant rounded-lg p-stack-md",
+          "bg-surface-container-lowest border border-surface-variant rounded-lg p-gutter-mobile",
           "shadow-[0_4px_12px_rgba(0,33,83,0.08)]",
           className,
         )}

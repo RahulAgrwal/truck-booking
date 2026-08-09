@@ -51,7 +51,7 @@ export function ReviewSheet({
   */
   if (alreadyReviewed) {
     return (
-      <p className="flex items-center justify-center gap-stack-sm rounded-lg bg-surface-container-low p-stack-md font-body-md text-body-md text-on-surface-variant">
+      <p className="flex items-center justify-center gap-stack-sm rounded-lg bg-surface-container-low p-gutter-mobile font-body-md text-body-md text-on-surface-variant">
         <Icon name="check_circle" filled className="text-tertiary" />
         You&apos;ve rated this job. Thanks — it helps the next person choose.
       </p>

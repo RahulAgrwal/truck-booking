@@ -102,7 +102,7 @@ export default async function MyBidsPage({
                     className="block"
                     aria-label={`Your bid of ${formatINR(bid.amount)} — ${status.label}`}
                   >
-                    <article className="rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
+                    <article className="rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
                       <div className="mb-stack-sm flex items-start justify-between gap-stack-sm">
                         {/* Word first, colour second (§7.7). */}
                         <Badge tone={status.tone}>{status.label}</Badge>
@@ -129,7 +129,7 @@ export default async function MyBidsPage({
 
                         <div className="flex shrink-0 flex-col items-end gap-unit text-right">
                           <span className="flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
-                            <Icon name="scale" className="text-[14px]" />
+                            <Icon name="scale" className="text-icon-sm" />
                             {formatWeight(bid.auction.weightKg)}
                           </span>
                           <span className="font-body-md text-body-md text-on-surface-variant">
@@ -146,9 +146,9 @@ export default async function MyBidsPage({
                       */}
                       {bid.status === "ACCEPTED" ? (
                         <p className="mt-stack-sm flex items-center justify-end gap-1 font-label-bold text-label-bold uppercase tracking-wider text-primary">
-                          <Icon name="call" className="text-[14px]" />
+                          <Icon name="call" className="text-icon-sm" />
                           Contact &amp; rate
-                          <Icon name="chevron_right" className="text-[14px]" />
+                          <Icon name="chevron_right" className="text-icon-sm" />
                         </p>
                       ) : null}
                     </article>

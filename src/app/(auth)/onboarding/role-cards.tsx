@@ -68,7 +68,7 @@ export function RoleCards() {
               />
               <div
                 className={[
-                  "p-stack-md rounded-xl bg-surface-container-lowest transition-all duration-200",
+                  "p-gutter-mobile rounded-xl bg-surface-container-lowest transition-all duration-200",
                   "flex flex-col relative overflow-hidden active:scale-[0.98]",
                   isSelected
                     ? "border-2 border-primary shadow-[0_2px_10px_rgba(0,0,0,0.04)]"
@@ -84,7 +84,7 @@ export function RoleCards() {
                   aria-hidden="true"
                 >
                   <span
-                    className="material-symbols-outlined text-on-primary text-sm"
+                    className="material-symbols-outlined text-on-primary text-icon-sm"
                     style={{ fontVariationSettings: "'FILL' 1" }}
                   >
                     check
@@ -105,7 +105,7 @@ export function RoleCards() {
                   >
                     <span
                       className={[
-                        "material-symbols-outlined text-2xl transition-colors",
+                        "material-symbols-outlined text-icon-lg transition-colors",
                         isSelected ? "text-primary" : "text-secondary",
                       ].join(" ")}
                       style={{ fontVariationSettings: "'FILL' 1" }}

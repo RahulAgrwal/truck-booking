@@ -82,7 +82,7 @@ export function CarrierReputation({
           {withComment.map((review) => (
             <li
               key={review.id}
-              className="flex flex-col gap-unit rounded bg-surface-container-low p-3"
+              className="flex flex-col gap-unit rounded bg-surface-container-low p-stack-sm"
             >
               <div className="flex items-center justify-between gap-stack-sm">
                 <RatingStars average={review.stars} count={1} showCount={false} />

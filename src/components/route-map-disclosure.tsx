@@ -58,9 +58,9 @@ export function RouteMapDisclosure({
           "transition-transform active:scale-[0.98]",
         )}
       >
-        <Icon name="map" className="text-[20px] text-primary" />
+        <Icon name="map" className="text-icon-lg text-primary" />
         <span className="flex-1 text-left">{label}</span>
-        <Icon name={open ? "expand_less" : "expand_more"} className="text-[20px]" />
+        <Icon name={open ? "expand_less" : "expand_more"} className="text-icon-lg" />
       </button>
 
       <div id={panelId}>

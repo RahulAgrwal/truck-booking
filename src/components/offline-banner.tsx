@@ -59,7 +59,7 @@ export function OfflineBanner() {
       className="fixed top-0 left-0 z-[55] flex w-full items-center justify-center gap-stack-sm bg-error-container px-margin-mobile pt-safe pb-stack-sm text-on-error-container"
     >
       <span className="flex items-center gap-stack-sm pt-stack-sm">
-        <Icon name="cloud_off" filled className="text-[18px]" />
+        <Icon name="cloud_off" filled className="text-icon-lg" />
         <span className="font-label-bold text-label-bold">
           You&apos;re offline — prices may be out of date
         </span>

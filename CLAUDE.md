@@ -213,14 +213,37 @@ screens were actually built with. Where they disagree, Stitch wins.
 | Token | Size / line-height / weight | Used for |
 |---|---|---|
 | `label-bold` | 12 / 16 / 700 | Badges, nav labels, "REMAINING", uppercase micro-copy |
-| `body-md` | 14 / 20 / 400 | Card metadata, secondary copy |
-| `body-lg` | 16 / 24 / 400 | Body text, input values |
-| `timer-md` | 18 / 24 / 800 | Countdown timers |
-| `headline-md` | 20 / 28 / 700 | City names, section headers |
-| `headline-lg` | 24 / 32 / 700 | Screen titles, wordmark |
-| `display-price` | 32 / 40 / 900 / `-0.02em` | Bid amounts |
+| `body-md` | 13 / 18 / 400 | Card metadata, secondary copy |
+| `body-lg` | 15 / 22 / 400 | Body text, input values |
+| `timer-md` | 17 / 22 / 800 | Countdown timers |
+| `headline-md` | 17 / 24 / 700 | City names, section headers |
+| `headline-lg` | 20 / 28 / 700 | Screen titles, wordmark |
+| `display-price` | 26 / 34 / 900 / `-0.02em` | Bid amounts |
 
 Apply as a pair: `font-headline-md text-headline-md`.
+
+> **These are 390px-native sizes, and they are deliberately smaller than the Stitch markup says.**
+> The Stitch frames are 780×1768 — exactly 2× the baseline device — and the original scale carried
+> those pixel counts across unhalved, so the top of the ramp was roughly double what a phone wants.
+> The ramp is *compressed*, not uniformly scaled: the 12px caption floor is held for legibility and
+> the cut deepens toward the display end, where the crowding actually was (`headline-md` −3,
+> `headline-lg` −4, `display-price` −6). `timer-md` and `headline-md` share 17px and are separated
+> by weight alone; they never appear adjacent. **Do not "restore" these from the Stitch HTML** — §8's
+> "the markup wins" rule is about *tokens and structure*, and size is the documented exception,
+> alongside the `$`/`₹` drift.
+
+**Icon sizes.** Material Symbols are glyphs, so size *is* font-size — hence these are `text-*`
+utilities, not a separate concept. `.material-symbols-outlined` supplies **20px** when nothing is
+set, which covers the bottom nav and the app-bar buttons.
+
+| Token | Size | Used for |
+|---|---|---|
+| `icon-sm` | 13px | Inline with `body-md` — card meta rows, list affordances |
+| `icon-md` | 15px | Inline with `body-lg` — timer, verified, warning |
+| `icon-lg` | 18px | Standalone — route-row rails, disclosure chevrons |
+| `icon-xl` | 24px | Glyph as subject — FAB, empty states, rating input |
+
+No arbitrary `text-[Npx]` icon sizes remain in `src/`. Adding one is a mistake; extend the ladder.
 
 ### 4.3 Spacing & radius
 
@@ -232,12 +255,17 @@ radius: DEFAULT 0.25rem · lg 0.5rem · xl 0.75rem · full 9999px
 ```
 
 Screen horizontal padding is always `px-margin-mobile`. Vertical rhythm between cards is `space-y-stack-md`.
+Card *internal* padding is `p-gutter-mobile` (§4.4) — a deliberate 12px. The spacing tokens
+themselves are unchanged, because `margin-mobile` is the screen gutter and `touch-target-min` is the
+§3.1 floor. Density changes belong at the component, not the token.
 
 ### 4.4 Component recipes (lifted verbatim from the Stitch output)
 
-**Card**
+**Card** — `p-gutter-mobile`, **not** the Stitch recipe's `p-stack-md`. 16px of inset around the
+compressed §4.2 type left cards reading as hollow. Screen gutters (`px-margin-mobile`) and the 48px
+touch floor are untouched — only the card's own padding moved.
 ```html
-class="bg-surface-container-lowest border border-surface-variant rounded-lg p-stack-md
+class="bg-surface-container-lowest border border-surface-variant rounded-lg p-gutter-mobile
        shadow-[0_4px_12px_rgba(0,33,83,0.08)] active:scale-[0.98] transition-transform"
 ```
 
@@ -274,7 +302,7 @@ FAB     → fixed bottom-[calc(64px+16px)] right-4 w-14 h-14 rounded-full
 </div>
 ```
 
-**Metadata strip** — inset row at the card foot: `bg-surface-container-low p-3 rounded`, icon + text on the
+**Metadata strip** — inset row at the card foot: `bg-surface-container-low p-stack-sm rounded`, icon + text on the
 left, bid-count badge on the right (`bg-primary-container text-on-primary-container` when > 0,
 `bg-surface-variant text-on-surface-variant` when 0).
 

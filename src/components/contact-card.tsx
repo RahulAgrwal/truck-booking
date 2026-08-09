@@ -43,7 +43,7 @@ export function ContactCard({
   return (
     <section
       className={cn(
-        "flex flex-col gap-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md",
+        "flex flex-col gap-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile",
         "shadow-[0_4px_12px_rgba(0,33,83,0.08)]",
         className,
       )}
@@ -54,7 +54,7 @@ export function ContactCard({
           {title}
         </span>
         <span className="flex items-center gap-1 font-label-bold text-label-bold text-tertiary">
-          <Icon name="verified" filled className="text-[16px]" />
+          <Icon name="verified" filled className="text-icon-md" />
           Confirmed
         </span>
       </div>
@@ -81,7 +81,7 @@ export function ContactCard({
         tracking, its own bordered box — rather than sitting in a sentence.
       */}
       {isCarrier && party.truckNumber ? (
-        <div className="flex items-center gap-stack-md rounded bg-surface-container-low p-3">
+        <div className="flex items-center gap-stack-md rounded bg-surface-container-low p-stack-sm">
           <Icon name="local_shipping" filled className="text-on-surface-variant" />
           <div className="flex min-w-0 flex-col gap-unit">
             <span className="font-label-bold text-label-bold uppercase tracking-wider text-on-surface-variant">
@@ -136,7 +136,7 @@ export function ContactCard({
           but every user row that predates that migration has a null phone, and
           "no number on file" beats an empty space where a call button was.
         */
-        <p className="rounded bg-surface-container-low p-3 font-body-md text-body-md text-on-surface-variant">
+        <p className="rounded bg-surface-container-low p-stack-sm font-body-md text-body-md text-on-surface-variant">
           {party.name} hasn&apos;t added a phone number yet.
         </p>
       )}

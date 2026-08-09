@@ -18,7 +18,7 @@ export default async function OnboardingPage() {
       <header className="mb-stack-lg text-center flex flex-col items-center pt-safe">
         <div className="w-16 h-16 rounded-full bg-primary-fixed flex items-center justify-center mb-stack-md">
           <span
-            className="material-symbols-outlined text-primary text-3xl"
+            className="material-symbols-outlined text-primary text-icon-xl"
             style={{ fontVariationSettings: "'FILL' 1" }}
             aria-hidden="true"
           >

@@ -44,9 +44,9 @@ const GLYPH: Record<StarState, { name: string; filled: boolean }> = {
 };
 
 const SIZE = {
-  sm: "text-[16px]",
-  md: "text-[20px]",
-  lg: "text-[28px]",
+  sm: "text-icon-md",
+  md: "text-icon-lg",
+  lg: "text-icon-xl",
 } as const;
 
 export type RatingStarsSize = keyof typeof SIZE;

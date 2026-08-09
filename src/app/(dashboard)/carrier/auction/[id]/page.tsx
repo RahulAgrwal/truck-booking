@@ -105,7 +105,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
 
       <main className="flex-1 px-margin-mobile pt-stack-sm pb-[calc(env(safe-area-inset-bottom,0px)+160px)]">
         {/* Summary card — everything needed to price the job, in one glance. */}
-        <div className="relative mb-stack-lg overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest p-stack-md shadow-[0_2px_4px_rgba(0,34,80,0.08)]">
+        <div className="relative mb-stack-lg overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest p-gutter-mobile shadow-[0_2px_4px_rgba(0,34,80,0.08)]">
           <div className="mb-stack-sm flex items-start justify-between gap-stack-sm">
             <span className="rounded bg-primary-fixed px-2 py-1 font-label-bold text-label-bold uppercase tracking-wider text-primary">
               {expired ? "Closed" : "Open for bids"}
@@ -178,7 +178,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
             completely the wrong news.
           */
           <div className="flex flex-col gap-stack-md">
-            <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-tertiary-container p-stack-md text-center">
+            <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-tertiary-container p-gutter-mobile text-center">
               <Icon name="check_circle" filled className="text-on-tertiary-container" />
               <p className="font-headline-md text-headline-md text-on-tertiary-container">
                 You won this load
@@ -204,7 +204,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
             </Link>
           </div>
         ) : expired ? (
-          <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-error-container p-stack-md text-center">
+          <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-error-container p-gutter-mobile text-center">
             <Icon name="timer_off" filled className="text-on-error-container" />
             <p className="font-body-lg text-body-lg text-on-error-container">
               This auction has closed. No further bids can be placed.
@@ -237,7 +237,7 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
 function Fact({ icon, children }: { icon: string; children: ReactNode }) {
   return (
     <span className="flex items-center gap-1 text-secondary">
-      <Icon name={icon} className="text-[16px]" />
+      <Icon name={icon} className="text-icon-md" />
       <span className="font-body-md text-body-md">{children}</span>
     </span>
   );

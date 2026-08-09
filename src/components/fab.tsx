@@ -36,7 +36,7 @@ export function Fab({
         className,
       )}
     >
-      <Icon name={icon} filled className="text-[28px]" />
+      <Icon name={icon} filled className="text-icon-xl" />
     </Link>
   );
 }

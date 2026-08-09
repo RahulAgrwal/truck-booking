@@ -64,12 +64,25 @@ export type ColorToken = keyof typeof colors;
 /** CLAUDE.md §4.2 — Inter. Applied in markup as the pair `font-x text-x`. */
 export const typography = {
   labelBold: { size: 12, lineHeight: 16, weight: 700 },
-  bodyMd: { size: 14, lineHeight: 20, weight: 400 },
-  bodyLg: { size: 16, lineHeight: 24, weight: 400 },
-  timerMd: { size: 18, lineHeight: 24, weight: 800 },
-  headlineMd: { size: 20, lineHeight: 28, weight: 700 },
-  headlineLg: { size: 24, lineHeight: 32, weight: 700 },
-  displayPrice: { size: 32, lineHeight: 40, weight: 900, letterSpacing: "-0.02em" },
+  bodyMd: { size: 13, lineHeight: 18, weight: 400 },
+  bodyLg: { size: 15, lineHeight: 22, weight: 400 },
+  timerMd: { size: 17, lineHeight: 22, weight: 800 },
+  headlineMd: { size: 17, lineHeight: 24, weight: 700 },
+  headlineLg: { size: 20, lineHeight: 28, weight: 700 },
+  displayPrice: { size: 26, lineHeight: 34, weight: 900, letterSpacing: "-0.02em" },
+} as const;
+
+/**
+ * Icon sizes (CLAUDE.md §4.2). Material Symbols are glyphs, so size is
+ * font-size — hence `text-icon-*`, not a separate `size` prop. The
+ * `.material-symbols-outlined` base rule supplies 20px when none is set.
+ */
+export const iconSize = {
+  sm: 13,
+  md: 15,
+  lg: 18,
+  xl: 24,
+  base: 20,
 } as const;
 
 /** CLAUDE.md §4.3 — 4px unit. */

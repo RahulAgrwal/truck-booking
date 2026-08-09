@@ -80,7 +80,7 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
 
       <AppScreen className="gap-stack-lg">
         {/* Summary card. The accent bar is the Stitch screen's one flourish. */}
-        <section className="relative flex flex-col gap-stack-md overflow-hidden rounded-lg border border-surface-variant bg-surface-container-lowest p-4">
+        <section className="relative flex flex-col gap-stack-md overflow-hidden rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile">
           <div className="absolute top-0 left-0 h-1 w-full bg-primary-container" aria-hidden="true" />
 
           <div className="flex items-start justify-between gap-stack-sm pt-2">
@@ -89,7 +89,7 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
                 {auction.pickupLocation} to {auction.dropoffLocation}
               </h2>
               <p className="mt-1 flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
-                <Icon name="weight" className="text-[16px]" />
+                <Icon name="weight" className="text-icon-md" />
                 {formatWeight(auction.weightKg)} · {auction.materialDetails}
               </p>
             </div>
@@ -217,7 +217,7 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
 function Fact({ icon, children }: { icon: string; children: ReactNode }) {
   return (
     <span className="flex min-w-0 items-center gap-1 font-label-bold text-label-bold">
-      <Icon name={icon} className="text-[16px]" />
+      <Icon name={icon} className="text-icon-md" />
       <span className="truncate">{children}</span>
     </span>
   );
@@ -238,8 +238,8 @@ function StatusBanner({
     <section
       className={
         tone === "success"
-          ? "flex flex-col gap-stack-sm rounded-lg bg-tertiary-container p-stack-md text-on-tertiary-container"
-          : "flex flex-col gap-stack-sm rounded-lg bg-surface-container-high p-stack-md text-on-surface"
+          ? "flex flex-col gap-stack-sm rounded-lg bg-tertiary-container p-gutter-mobile text-on-tertiary-container"
+          : "flex flex-col gap-stack-sm rounded-lg bg-surface-container-high p-gutter-mobile text-on-surface"
       }
     >
       <div className="flex items-center gap-stack-sm">

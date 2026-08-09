@@ -71,7 +71,7 @@ export default async function ProfilePage() {
           </Badge>
         </section>
 
-        <section className="rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)]">
+        <section className="rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)]">
           <dl className="flex flex-col gap-stack-sm">
             {session.role === "SHIPPER" ? (
               <Row icon="local_shipping" label="Loads posted" value={String(auctionCount)} />
@@ -99,10 +99,10 @@ export default async function ProfilePage() {
         */}
         <Link
           href="/profile/details"
-          className="flex h-touch-target-min items-center justify-between gap-stack-sm rounded-lg border border-surface-variant bg-surface-container-lowest px-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]"
+          className="flex h-touch-target-min items-center justify-between gap-stack-sm rounded-lg border border-surface-variant bg-surface-container-lowest px-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]"
         >
           <span className="flex items-center gap-stack-sm font-body-lg text-body-lg text-on-surface">
-            <Icon name="contact_phone" className="text-[18px]" />
+            <Icon name="contact_phone" className="text-icon-lg" />
             Contact details
           </span>
           <Icon name="chevron_right" className="text-on-surface-variant" />
@@ -116,7 +116,7 @@ export default async function ProfilePage() {
           you, so it is shown to you unedited. There is no way to delete a
           review from here, and there should not be one.
         */}
-        <section className="flex flex-col gap-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)]">
+        <section className="flex flex-col gap-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)]">
           <div className="flex items-center justify-between gap-stack-sm">
             <h3 className="font-headline-md text-headline-md text-on-surface">Your rating</h3>
             <RatingStars average={average} count={ratingCount} size="md" />
@@ -138,7 +138,7 @@ export default async function ProfilePage() {
               {reviews.map((review) => (
                 <li
                   key={review.id}
-                  className="flex flex-col gap-unit rounded bg-surface-container-low p-3"
+                  className="flex flex-col gap-unit rounded bg-surface-container-low p-stack-sm"
                 >
                   <div className="flex items-center justify-between gap-stack-sm">
                     <RatingStars average={review.stars} count={1} showCount={false} />
@@ -170,7 +170,7 @@ function Row({ icon, label, value }: { icon: string; label: string; value: React
   return (
     <div className="flex items-center justify-between gap-stack-sm">
       <dt className="flex items-center gap-stack-sm font-body-md text-body-md text-on-surface-variant">
-        <Icon name={icon} className="text-[18px]" />
+        <Icon name={icon} className="text-icon-lg" />
         {label}
       </dt>
       <dd className="font-body-lg text-body-lg text-on-surface">{value}</dd>

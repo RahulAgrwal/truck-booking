@@ -51,7 +51,7 @@ export function BidCard({
   return (
     <article
       className={cn(
-        "bg-surface-container-lowest rounded-lg p-stack-md",
+        "bg-surface-container-lowest rounded-lg p-gutter-mobile",
         "shadow-[0_4px_12px_rgba(0,33,83,0.08)]",
         // A won bid is outlined, not just tinted — §7.7 forbids colour as the
         // only signal, and the "Won" badge below carries the word.

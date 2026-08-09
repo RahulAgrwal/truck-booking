@@ -65,7 +65,7 @@ export function StarRatingInput({
               />
               <span
                 className={cn(
-                  "material-symbols-outlined text-[32px]",
+                  "material-symbols-outlined text-icon-xl",
                   on ? "text-primary" : "text-outline-variant",
                   // The focus ring has to live here: the input itself is sr-only,
                   // so keyboard focus would otherwise be invisible.

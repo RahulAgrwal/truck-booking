@@ -138,7 +138,7 @@ export function AcceptBidSheet({
           </div>
         }
       >
-        <div className="flex flex-col gap-stack-sm rounded-lg bg-surface-container-low p-stack-md">
+        <div className="flex flex-col gap-stack-sm rounded-lg bg-surface-container-low p-gutter-mobile">
           <div className="flex items-baseline justify-between gap-stack-sm">
             <span className="font-body-md text-body-md text-on-surface-variant">Carrier</span>
             <span className="truncate text-right font-body-lg text-body-lg text-on-surface">

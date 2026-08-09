@@ -40,7 +40,7 @@ export function BidSuccess({
           has been placed. You&apos;ll be notified if the shipper accepts.
         </p>
 
-        <div className="mt-stack-lg flex w-full items-center justify-between gap-stack-sm rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md">
+        <div className="mt-stack-lg flex w-full items-center justify-between gap-stack-sm rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile">
           <div className="flex min-w-0 items-center gap-2">
             <Icon name="local_shipping" filled className="text-primary" />
             <div className="min-w-0 text-left">

@@ -96,7 +96,7 @@ function HistoryAuctionCard({
         assigned ? "assigned" : "expired"
       }`}
     >
-      <article className="rounded-lg border border-surface-variant bg-surface-container-lowest p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
+      <article className="rounded-lg border border-surface-variant bg-surface-container-lowest p-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
         <div className="mb-stack-md flex items-start justify-between gap-stack-sm">
           {/* Word first — colour never carries the state alone (§7.7). */}
           <Badge tone={assigned ? "success" : "neutral"}>{assigned ? "Assigned" : "Expired"}</Badge>
@@ -115,9 +115,9 @@ function HistoryAuctionCard({
           className="mb-stack-md"
         />
 
-        <div className="flex items-center justify-between gap-stack-sm rounded bg-surface-container-low p-3">
+        <div className="flex items-center justify-between gap-stack-sm rounded bg-surface-container-low p-stack-sm">
           <div className="flex min-w-0 items-center gap-2 font-body-md text-body-md text-on-surface-variant">
-            <Icon name="weight" className="text-[18px]" />
+            <Icon name="weight" className="text-icon-lg" />
             <span className="truncate">
               {formatWeight(auction.weightKg)} • {auction.materialDetails}
             </span>
@@ -147,9 +147,9 @@ function HistoryAuctionCard({
         */}
         {assigned ? (
           <p className="mt-stack-sm flex items-center justify-end gap-1 font-label-bold text-label-bold uppercase tracking-wider text-primary">
-            <Icon name="call" className="text-[14px]" />
+            <Icon name="call" className="text-icon-sm" />
             Contact &amp; rate
-            <Icon name="chevron_right" className="text-[14px]" />
+            <Icon name="chevron_right" className="text-icon-sm" />
           </p>
         ) : null}
       </article>
@@ -173,7 +173,7 @@ function ShipperAuctionCard({
       className={cn("block", className)}
       aria-label={`Auction ${auction.pickupLocation} to ${auction.dropoffLocation}`}
     >
-      <article className="bg-surface-container-lowest border border-surface-variant rounded-lg p-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
+      <article className="bg-surface-container-lowest border border-surface-variant rounded-lg p-gutter-mobile shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]">
         <div className="mb-stack-md flex items-start justify-between">
           <LiveBadge />
           <Timer endTime={auction.endTime} variant="bare" />
@@ -185,9 +185,9 @@ function ShipperAuctionCard({
           className="mb-stack-md"
         />
 
-        <div className="flex items-center justify-between gap-stack-sm bg-surface-container-low p-3 rounded">
+        <div className="flex items-center justify-between gap-stack-sm bg-surface-container-low p-stack-sm rounded">
           <div className="flex min-w-0 items-center gap-2 font-body-md text-body-md text-on-surface-variant">
-            <Icon name="weight" className="text-[18px]" />
+            <Icon name="weight" className="text-icon-lg" />
             <span className="truncate">
               {formatWeight(auction.weightKg)} • {auction.materialDetails}
             </span>
@@ -295,7 +295,7 @@ function BidStateBadge({ hasBid }: { hasBid: boolean }) {
       <Icon
         name={hasBid ? "check_circle" : "radio_button_unchecked"}
         filled={hasBid}
-        className="text-[14px]"
+        className="text-icon-sm"
       />
       {hasBid ? "Bid placed" : "New"}
     </Badge>
@@ -305,7 +305,7 @@ function BidStateBadge({ hasBid }: { hasBid: boolean }) {
 function MetaPill({ icon, children }: { icon: string; children: ReactNode }) {
   return (
     <span className="flex items-center gap-1 rounded bg-surface-container-low px-2 py-1 font-label-bold text-label-bold text-on-surface-variant">
-      <Icon name={icon} className="text-[14px]" />
+      <Icon name={icon} className="text-icon-sm" />
       {children}
     </span>
   );

@@ -149,7 +149,7 @@ export function AuctionForm() {
       onSubmit={handleSubmit}
       className="flex flex-col gap-stack-lg pb-[calc(env(safe-area-inset-bottom,0px)+112px)]"
     >
-      <section className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm">
+      <section className="bg-surface-container-lowest p-gutter-mobile rounded-xl border border-surface-variant shadow-sm">
         <div className="space-y-stack-md">
           <LocationAutocomplete
             label="Pickup Location"
@@ -189,7 +189,7 @@ export function AuctionForm() {
         </div>
       </section>
 
-      <section className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm space-y-stack-md">
+      <section className="bg-surface-container-lowest p-gutter-mobile rounded-xl border border-surface-variant shadow-sm space-y-stack-md">
         <Textarea
           label="Material Description"
           placeholder="e.g. Steel Coils"
@@ -291,7 +291,7 @@ function RouteStrip({ route }: { route: RoutePreview }) {
     <div
       aria-live="polite"
       className={cn(
-        "flex items-center gap-stack-sm rounded p-3",
+        "flex items-center gap-stack-sm rounded p-stack-sm",
         isError ? "bg-error-container" : "bg-surface-container-low",
       )}
     >
