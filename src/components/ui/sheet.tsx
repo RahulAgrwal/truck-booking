@@ -48,15 +48,28 @@ export function Sheet({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // Lock the page behind the sheet. Without this the body scrolls under the
-  // overlay on iOS, which reads as the sheet itself drifting.
+  /*
+    Lock the page behind the sheet. Without this it scrolls under the overlay,
+    which reads as the sheet itself drifting.
+
+    **`documentElement`, not `body`.** The root element's overflow is what
+    propagates to the viewport, so `<html>` is the actual scroller and setting
+    `overflow: hidden` on `<body>` locks nothing — it only turns body into a
+    second scroll container that can never scroll, because its height is its
+    content height. That is the same mechanism that broke page scrolling
+    outright in globals.css (docs/progress-A.md), seen from the other side.
+
+    Cleanup restores the previous inline value, which is normally "", letting
+    the stylesheet's own `html { overflow-x: hidden }` take back over.
+  */
   useEffect(() => {
     if (!open) return;
 
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previous;
+      root.style.overflow = previous;
     };
   }, [open]);
 
