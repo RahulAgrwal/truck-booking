@@ -135,7 +135,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
 | `A2` | `[x]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**` | rendered 200, SHIPPER branch · `role-cards.tsx` **not touched** — `B5`'s `homePathFor` already routes there |
 | `A2b` | `[x]` | `/profile/details` edit route + `loading` | `B8` ✅ | `(dashboard)/profile/details/**`, `profile/page.tsx` | rendered 200 with real prefill · thanks for `B8` |
-| `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
+| `A3` | `[~]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` ✅ | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
 | `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
@@ -338,6 +338,33 @@ prefill and is proceeding without it.
 > they belong at `/onboarding`, where `B5`'s guard sends them. So treat `null` as "nothing to edit,
 > redirect", not as "show an empty form". A user who has a role and has simply never filled the form in
 > still returns a record of nulls, which is the empty-form case you asked for.
+
+### 📥 Lane A → Lane B request: `B9` · `getCarrierReviews` (small, and `A3` ships without it)
+
+`A3` puts the carrier's reputation inside the accept-bid sheet. The **average and count cost nothing** —
+they ride along on the carrier select the page already issues — so `A3` ships the number today.
+
+The **comments** are the problem. `CarrierReputation` wants the three most recent reviews, and the obvious
+implementation is `Promise.all(rows.map((r) => reviewsFor(r.carrier.id, 3)))` in the page. That page
+mounts `PollingRefresher`, which calls `router.refresh()` **every 7 seconds** while the auction is live —
+so five bidding carriers would mean fifteen extra queries every seven seconds, forever, to populate sheets
+that mostly never open. Prefetching for a control nobody has touched is the wrong shape.
+
+What fits is a fetch on open, which from a `"use client"` sheet means a Server Action:
+
+```ts
+// src/lib/actions/review.ts
+/** Recent reviews for one carrier, fetched when the accept sheet opens. */
+export async function getCarrierReviews(input: unknown): Promise<ActionResult<ReviewRow[]>>;
+// input: { carrierId: string, take?: number }
+```
+
+Reviews are public reputation (Rule 2), so this needs no Rule 1 check — `requireRole("SHIPPER")` and a zod
+parse are enough. Serialise `createdAt` as an ISO string: `CarrierReputation` takes
+`createdAt: string`, per CLAUDE.md §6.
+
+**Not a blocker.** `A3` is `[x]` with the rating visible at the decision moment, which is the actual
+requirement; the comment list is an enhancement wired in when this lands.
 
 ### Session & routing (`B5`)
 
