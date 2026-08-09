@@ -481,7 +481,28 @@ lane's files — that worked, `prisma/schema.prisma` stayed out of my commit twi
 one file, and Claude 2's `git add docs/feature-contact-ratings.md` swept up my uncommitted edits into
 their commit. Harmless here; worth knowing before something less harmless.
 
-### NOT VERIFIED — the `A6` worklist
+### `A6` ran — the worklist below is now mostly closed
+
+Driven in headless Chrome over CDP at 390×844 (`217198d`). Full table in
+[`docs/feature-contact-ratings.md` §4d](./feature-contact-ratings.md). Headlines:
+
+- **Found and fixed a tap-target bug in every form in the app** — `Input`'s inner `<input>` was 24px
+  inside a 48px wrapper, leaving a 12px dead strip top and bottom. `elementFromPoint` proved it.
+- **`submitReview` and `acceptBid` both run end to end**, including the `ratingSum`/`ratingCount`
+  increment. Those were Lane B's two flagged unknowns.
+- **The `sheet.tsx` scroll-lock fix is now behavioural, not reasoned**: `scrollBy(0,400)` behind an open
+  sheet moves the page 0px.
+- Star picker, focus ring, reduced motion, carrier onboarding branch, 0px horizontal overflow on 9 routes.
+
+Still open: the `P2002` duplicate-review path (unreachable through the UI by design), and anything needing
+a *real* device — touch scrolling, iOS rubber-band, the on-screen keyboard.
+
+**Two operational lessons worth more than the code:** `npx next build` while `next dev` is running
+corrupts `.next` until you delete it (every route 404s, `/login` included) — stop dev first. And three
+apparent bugs were my own probes: `innerText` includes `sr-only` text and applies CSS `uppercase`, and a
+dev-mode `router.refresh()` takes longer than 3.5s.
+
+### NOT VERIFIED — the original `A6` worklist (superseded above)
 
 Everything above is `curl` against the dev server. **Nothing has been seen at 390×844, and no control has
 been operated.** In rough order of how likely it is to be wrong:
