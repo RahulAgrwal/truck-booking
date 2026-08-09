@@ -104,7 +104,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B8` | `[x]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | ✅ **`A2b`'s gate is OPEN** · shipped as requested, one caveat below |
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
-| `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
+| `B6` | `[~]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
 | `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
 
 **`B2` is the unblocking commit.** It ships *signatures*, not behaviour — `getDeal` returns `null`,
