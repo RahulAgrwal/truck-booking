@@ -452,3 +452,53 @@ the data's age, not a defect.
 Both lanes code-complete. Deferred backlog: Nearby/geo filtering (needs carrier location, not route
 distance), notifications, service worker, dark-mode verification, ratings — plus `V5`/`V7`/`V9`, which
 need a real device, and the entire Google Maps path, which needs API keys.
+
+## Fix: page could not be scrolled by finger or wheel (`globals.css`)
+
+**Symptom.** On any screen taller than the viewport, dragging or scrolling did nothing. `window.scrollTo()`
+worked, so the page was genuinely scrollable — only *input-driven* scrolling was dead.
+
+**Root cause — the `body` rule in `src/app/globals.css`.** It repeated two declarations that `html`
+already carried:
+
+```css
+body { overscroll-behavior: none; overflow-x: hidden; }
+```
+
+The root element's overflow is propagated to the viewport, so `html` is what actually clips horizontally
+and stops the rubber-band, and `html`'s own used overflow becomes `visible`. Body's copies were therefore
+redundant — and jointly fatal:
+
+1. `overflow-x: hidden` on a non-propagating element forces its `overflow-y` to compute to `auto`, so
+   `<body>` became its own scroll container. Body's height is its content height, so its `scrollHeight`
+   always equals its `clientHeight` — it can never scroll a single pixel.
+2. Wheel/touch hit-tests to that dead scroll container first. It would normally *chain* up to the viewport
+   scroller, but `overscroll-behavior: none` on the same element forbids exactly that.
+
+So every gesture was absorbed by `<body>` and never reached the viewport. `window.scrollTo()` was
+unaffected because it addresses the scroller directly, bypassing hit-testing — which is why this presented
+as "scrolling is broken" rather than "the page is too short".
+
+**Fix.** Drop both declarations from `body`; keep them on `html`, where they do the intended work.
+
+**Evidence.** Measured over CDP in headless Chrome (mobile emulation) against the dev server. On a bare
+`<div style="height:3000px">` page with no app code: scrolls (`scrollY` 120) → add the app's `html`+`body`
+rules: stuck at 0 → remove only `body`'s two declarations: scrolls again (120). On `/carrier` with content
+forced past the fold, wheel `scrollY` went 0 → 200 at 390×844, 375×667 and 360×640, while `scrollX` stayed
+0 and `scrollWidth == clientWidth` at all three, so horizontal clipping did not regress.
+
+**NOT VERIFIED:** no `typecheck`/`lint`/`build` run (CSS-only change; §10 defers them). Touch-gesture
+scrolling could not be confirmed — CDP touch synthesis is inert in this headless build, proven by a control
+test where a plain tall page also failed to scroll by touch but scrolled by wheel. The wheel and touch
+paths share the same hit-test-and-chain logic that was at fault, so the fix should cover both, but **the
+one thing to re-check on a real phone is a finger drag.** Rubber-band suppression on iOS is also unverified
+here; it now rests solely on `html`, which is the correct element for it.
+
+**Ownership note.** `globals.css` is Lane B's file (BuildPlan.md §3). Edited by Lane A because Lane B is
+code-complete (`docs/progress-B.md`: all steps `[x]`), so there was no concurrent writer to clobber, and
+the user asked for this fix directly.
+
+**Adjacent bug found, NOT fixed** (out of scope, Lane B's `src/components/ui/sheet.tsx:56`): the sheet's
+scroll lock does `document.body.style.overflow = "hidden"`, which does not lock anything — `<body>` is not
+the element whose overflow propagates to the viewport, so the page still scrolls behind an open sheet. It
+needs to target `document.documentElement` instead. This predates the change above and is unaffected by it.

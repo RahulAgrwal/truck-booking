@@ -226,8 +226,28 @@
   }
 
   body {
-    overscroll-behavior: none;
-    overflow-x: hidden;
+    /*
+      `overflow-x: hidden` and `overscroll-behavior: none` are deliberately NOT
+      repeated here — together they made the page unscrollable.
+
+      The root element's overflow is propagated to the viewport, so `html` above
+      is what actually clips horizontally and kills the rubber-band; `html`'s own
+      used overflow becomes `visible` and the viewport does the scrolling.
+      Body's copies are therefore redundant — and worse than redundant:
+
+        1. `overflow-x: hidden` on a non-propagating element forces its
+           `overflow-y` to compute to `auto`, making <body> its own scroll
+           container. Body's height is its content height, so scrollHeight
+           always equals clientHeight — it can never scroll by even a pixel.
+        2. A wheel/touch gesture hit-tests to that dead scroll container first.
+           It would normally chain up to the viewport, but `overscroll-behavior:
+           none` on the same element forbids exactly that.
+
+      Net effect: every gesture was swallowed by <body> and never reached the
+      viewport scroller. `window.scrollTo()` still worked (it addresses the
+      scroller directly, bypassing hit-testing), which is why this looked like
+      "scrolling is broken" rather than "the page is too short".
+    */
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
     background-color: var(--color-background);
