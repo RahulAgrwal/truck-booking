@@ -599,3 +599,63 @@ the user asked for this fix directly.
 scroll lock does `document.body.style.overflow = "hidden"`, which does not lock anything — `<body>` is not
 the element whose overflow propagates to the viewport, so the page still scrolls behind an open sheet. It
 needs to target `document.documentElement` instead. This predates the change above and is unaffected by it.
+
+---
+
+## Carrier feed: per-viewer "Bid placed" / "New" status chip (user directive)
+
+Ad-hoc task, not a BuildPlan step. On `/carrier` (Find Loads), each load card now leads with a chip
+saying whether **this** carrier has already bid on it.
+
+**Files.** `src/components/auction-card.tsx` (new `hasBid` field on `AuctionCardData`, new
+`BidStateBadge`, rendered only by the `carrier` variant), `src/app/(dashboard)/carrier/page.tsx`
+(the lookup), `src/app/(dashboard)/carrier/loading.tsx` (skeleton `lines` 5 → 6, so the placeholder
+still matches the card's real height).
+
+**Mobbin references** (CLAUDE.md §8 — this screen is Stitch-designed, so these informed the *addition*
+only, not the card): [eBay "Bids & offers"](https://mobbin.com/screens/1ca43fc0-557a-4ab5-a55f-58e59eb386a5)
+and [Opendoor Offers](https://mobbin.com/screens/d1e0618e-1037-4b05-b60e-a2c604c7a683) both lead the row
+with the viewer's own relationship to the listing (`OFFER RECEIVED`, `ACTIVE`) above the title and price;
+[Airtasker Browse tasks](https://mobbin.com/screens/e6fb2c68-dfbf-4c2a-837a-4407038d867c) and
+[Redfin Feed](https://mobbin.com/screens/97e5e553-ccc1-43e5-8603-b622df6c1d00) put the same signal
+top-left. Hence a chip at the head of the card rather than beside the timer, which is already occupied.
+
+**Both states render, never one.** An absent chip is indistinguishable from a chip that failed to render,
+and "New" only reads as *new to you* when it occupies the same slot the bidded state occupies on the card
+above it. Word first, tone second (§7.7): `success` (green) for **Bid placed**, `neutral` for **New**.
+Green rather than the safety orange deliberately — on this screen orange already means "the price to beat"
+and "the button you press", and a third meaning would flatten all three.
+
+**`hasBid` cannot be derived from `bidCount`.** It is per-viewer: a load with nine bids may be untouched by
+the carrier reading it. It comes from a second query — `bid.findMany({ carrierId, auctionId: { in: … },
+distinct: ["auctionId"] })` over just the ids on the page — because the feed's `include` already spends
+`_count.bids` on the total and `bids` on the global minimum, and neither can be per-carrier as well without
+losing what it is there for. `distinct` is load-bearing: seed `auction1` holds two bids from `carrier1`
+(47000 then 43500), which is normal in a reverse auction. Skipped entirely when the page is empty.
+
+Freshness is already handled: `submitBid` calls `revalidatePath("/carrier")` (`src/lib/actions/bid.ts:95`)
+and the page is `force-dynamic`, so the chip flips on the next poll without new plumbing.
+
+**Ownership.** `auction-card.tsx` and the carrier feed are Lane B's (BuildPlan.md §3). Edited by Lane A on
+the same basis as the `globals.css` scroll fix above: Lane B is code-complete (`docs/progress-B.md`, all
+steps `[x]`), so there is no concurrent writer, and the user asked for this directly.
+
+**VERIFIED:** `npm run typecheck` and `npm run lint` both clean.
+
+**NOT VERIFIED:** no 390×844 pass, and no `build`/`test`. A `next dev` server was already running on
+:3000 from this directory, so a second instance with `DEV_BYPASS_ROLE=CARRIER` was refused, and the
+running one is seeded `SHIPPER` — `/carrier` just redirects. To see it:
+stop the running server, then `DEV_BYPASS_ROLE=CARRIER npm run dev`; seeded `carrier1@demo.test` has bids
+on auctions 1, 4 and 5 and none on 2 and 3, so both chip states appear in one screenshot.
+
+Most likely to be wrong, in order:
+1. **Chip metrics.** `Badge` is `h-6` with `px-stack-sm`; the icon is forced to `text-[14px]` against the
+   Material Symbols default of 24px. If the chip looks tall, lopsided, or the glyph is clipped, that
+   override is the cause — `MetaPill` in the same file uses the identical trick and is the thing to
+   compare against.
+2. **`radio_button_unchecked`** for the New state. It is not in §4.5's icon inventory (the font is loaded
+   whole, not subsetted, so it will render) and it may read as a disabled checkbox rather than
+   "untouched". A bare dot, or dropping the icon on the New state only, are the two fallbacks.
+3. **Vertical rhythm.** The chip is a new first child of a `flex flex-col gap-stack-sm` card, so every card
+   grew ~32px and fewer fit above the fold. `loading.tsx` was bumped to match; if the skeleton still jumps
+   on hydration, that 5 → 6 was the wrong size.

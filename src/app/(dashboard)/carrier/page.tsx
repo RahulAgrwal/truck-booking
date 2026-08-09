@@ -71,6 +71,30 @@ export default async function CarrierFeedPage({
     },
   });
 
+  /*
+    Which of these loads this carrier has already bid on.
+
+    A second query rather than a filtered relation count: the `include` above
+    already spends `_count.bids` on the total and `bids` on the global minimum,
+    and neither can be per-carrier as well without losing what it is there for.
+    One indexed `IN` over the page's ids is cheap, and `distinct` keeps the
+    result one row per auction however many times the carrier undercut himself.
+  */
+  const myBidAuctionIds = new Set(
+    auctions.length === 0
+      ? []
+      : (
+          await prisma.bid.findMany({
+            where: {
+              carrierId: session.userId,
+              auctionId: { in: auctions.map((auction) => auction.id) },
+            },
+            select: { auctionId: true },
+            distinct: ["auctionId"],
+          })
+        ).map((bid) => bid.auctionId),
+  );
+
   const cards: AuctionCardData[] = auctions.map((auction) => ({
     id: auction.id,
     pickupLocation: auction.pickupLocation,
@@ -83,6 +107,7 @@ export default async function CarrierFeedPage({
     currentPrice: auction.bids[0]?.amount ?? null,
     distanceKm: auction.distanceKm,
     estimatedTimeMins: auction.estimatedTimeMins,
+    hasBid: myBidAuctionIds.has(auction.id),
   }));
 
   const filtered = filter !== "all" || query !== null;

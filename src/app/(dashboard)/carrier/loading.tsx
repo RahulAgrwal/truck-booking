@@ -44,7 +44,8 @@ export default function CarrierFeedLoading() {
 
         <div className="flex flex-col gap-stack-md" aria-busy="true" aria-label="Loading loads">
           {[0, 1, 2].map((i) => (
-            <SkeletonBlock key={i} variant="card" lines={5} />
+            /* 6, not 5: the card gained the Bid placed / New status chip. */
+            <SkeletonBlock key={i} variant="card" lines={6} />
           ))}
         </div>
       </AppScreen>

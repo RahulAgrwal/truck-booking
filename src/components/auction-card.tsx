@@ -42,6 +42,12 @@ export type AuctionCardData = {
   estimatedTimeMins?: number | null;
   pickupAt?: string | null;
   dropoffAt?: string | null;
+  /**
+   * `carrier` variant only — whether the *viewing* carrier has already bid on
+   * this auction. Per-viewer, so it can never be derived from `bidCount`:
+   * a load with nine bids may still be untouched by the carrier reading it.
+   */
+  hasBid?: boolean;
   /** `history` variant only — which terminal state this auction reached. */
   status?: "ACTIVE" | "CLOSED_EXPIRED" | "COMPLETED_ASSIGNED";
   /** `history` variant only — the accepted bid's amount, when one was accepted. */
@@ -196,6 +202,15 @@ function CarrierAuctionCard({
         className,
       )}
     >
+      {/*
+        The card leads with the carrier's own relationship to the load, the
+        way eBay's "Bids & offers" rows lead with OFFER RECEIVED and Opendoor's
+        offer cards lead with ACTIVE. On a feed that is scanned rather than
+        read, "have I already dealt with this one" is the first question, and
+        answering it below the fold answers it too late.
+      */}
+      <BidStateBadge hasBid={auction.hasBid === true} />
+
       <div className="flex items-start justify-between gap-stack-sm">
         <div className="flex min-w-0 flex-col">
           <span className="font-label-bold text-label-bold uppercase tracking-wider text-on-surface-variant">
@@ -242,6 +257,31 @@ function CarrierAuctionCard({
         View &amp; Bid
       </Link>
     </article>
+  );
+}
+
+/**
+ * "Bid placed" / "New" — the carrier feed's per-viewer status chip.
+ *
+ * Both states render. An absent badge would be indistinguishable from a badge
+ * that failed to load, and "New" is only legible as *new to you* when it sits
+ * in the same slot the bidded state occupies on the card next to it.
+ *
+ * The word does the work and the tone reinforces it (§7.7); the icon is
+ * decorative, so it stays `aria-hidden` via `Icon`'s default. Green is the
+ * acted-on state — deliberately not the safety orange, which on this screen
+ * already means "the price to beat" and "the button you press".
+ */
+function BidStateBadge({ hasBid }: { hasBid: boolean }) {
+  return (
+    <Badge tone={hasBid ? "success" : "neutral"} className="gap-1 self-start">
+      <Icon
+        name={hasBid ? "check_circle" : "radio_button_unchecked"}
+        filled={hasBid}
+        className="text-[14px]"
+      />
+      {hasBid ? "Bid placed" : "New"}
+    </Badge>
   );
 }
 
