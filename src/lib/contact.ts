@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { AuctionStatus, Role } from "@/generated/prisma/enums";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Rule 1 — contact visibility (docs/feature-contact-ratings.md §2), and the
@@ -88,17 +89,98 @@ export type Deal = {
 };
 
 /**
+ * The one select of the sensitive columns.
+ *
+ * `role` is deliberately **not** selected. The column is nullable (it stays
+ * null until onboarding), but the role that matters on a contact card is the
+ * one this person played in *this deal* — shipper or winning carrier — which
+ * is a fact about their position in the query, not about a column that could
+ * in principle disagree with it. Deriving it removes a null case that had no
+ * sensible answer.
+ */
+const dealPartySelect = {
+  id: true,
+  name: true,
+  profileImage: true,
+  phone: true,
+  address: true,
+  companyName: true,
+  truckNumber: true,
+  truckType: true,
+  ratingSum: true,
+  ratingCount: true,
+} satisfies Prisma.UserSelect;
+
+type DealPartyRow = Prisma.UserGetPayload<{ select: typeof dealPartySelect }>;
+
+function toDealParty(row: DealPartyRow, role: Role): DealParty {
+  return {
+    userId: row.id,
+    name: row.name,
+    profileImage: row.profileImage,
+    role,
+    phone: row.phone,
+    address: row.address,
+    companyName: row.companyName,
+    truckNumber: row.truckNumber,
+    truckType: row.truckType,
+    ratingSum: row.ratingSum,
+    ratingCount: row.ratingCount,
+  };
+}
+
+/**
  * The contact card's entire data source, or `null` when Rule 1 says no.
  *
  * `null` means "render nothing" — never a placeholder, never a locked-looking
  * card. A screen that draws "contact details hidden" has told a losing carrier
  * that a winner exists, which is exactly the fact the rule is protecting.
  *
- * STUB — `B3` implements the query. Returning `null` is the fail-closed
- * default, so the intermediate state cannot leak anything.
+ * One round trip. The `where` is `dealWhere`, so the row simply does not come
+ * back for anyone the rule excludes — the filtering is the query, not a check
+ * on data we already fetched. That ordering is the point: an unauthorised
+ * caller never has the phone number in memory to begin with.
  */
 export async function getDeal(auctionId: string, viewerId: string): Promise<Deal | null> {
-  void auctionId;
-  void viewerId;
-  return null;
+  const auction = await prisma.auction.findFirst({
+    where: dealWhere(auctionId, viewerId),
+    select: {
+      id: true,
+      shipper: { select: dealPartySelect },
+      // At most one — `acceptBid` accepts a single bid and rejects the rest.
+      bids: {
+        where: { status: "ACCEPTED" },
+        select: { amount: true, carrier: { select: dealPartySelect } },
+        take: 1,
+      },
+      // The @@unique([auctionId, authorId]) index, used as an existence check.
+      reviews: { where: { authorId: viewerId }, select: { id: true }, take: 1 },
+    },
+  });
+
+  if (!auction) return null;
+
+  const accepted = auction.bids[0];
+  // Unreachable through `dealWhere`, which requires an ACCEPTED bid in both
+  // branches. Kept because the alternative to a null check here is a crash on
+  // a contact card, and because it keeps this function correct on its own
+  // terms rather than only in combination with its `where`.
+  if (!accepted) return null;
+
+  const shipper = auction.shipper;
+  const carrier = accepted.carrier;
+
+  const viewerIsShipper = shipper.id === viewerId;
+  if (!viewerIsShipper && carrier.id !== viewerId) return null;
+
+  const shipperParty = toDealParty(shipper, "SHIPPER");
+  const carrierParty = toDealParty(carrier, "CARRIER");
+
+  return {
+    auctionId: auction.id,
+    amount: accepted.amount,
+    me: viewerIsShipper ? shipperParty : carrierParty,
+    them: viewerIsShipper ? carrierParty : shipperParty,
+    iReviewed: auction.reviews.length > 0,
+  };
 }

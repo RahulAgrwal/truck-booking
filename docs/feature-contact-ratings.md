@@ -100,7 +100,8 @@ by it. **Conflating the two is the one way this feature leaks.**
 |---|---|---|---|---|---|
 | `B1` | `[x]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | applied to Neon · ⚠ `Review` FKs are `RESTRICT`, so `B7`'s seed must delete reviews first |
 | `B2` | `[x]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/{user,review}.ts` | **`A2` `A3` `A4` gates are OPEN** · typecheck+lint+74 tests green · see the three notes at the end of §4 |
-| `B3` | `[~]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | opens `A4` |
+| `B3` | `[x]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | **`A4`'s gate is OPEN** · 12 tests, 86 total green |
+| `B8` | `[~]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | claimed, building now — unblocks `A2b` |
 | `B4` | `[ ]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
 | `B5` | `[ ]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |

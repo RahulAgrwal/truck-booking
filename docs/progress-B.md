@@ -640,7 +640,8 @@ by what would hurt most if wrong:
 |------|--------|-------|--------|-------|
 | B1 | `[x]` | Schema + migration | `7a00aa1`+ | migration applied to Neon · **`B2` `B5` `B6` `B7` gates OPEN** |
 | B2 | `[x]` | Contracts + typed stubs | | **`A2` `A3` `A4` gates OPEN** · typecheck+lint+74 tests green |
-| B3 | `[ ]` | Visibility rule | | |
+| B3 | `[x]` | Visibility rule | | **`A4` gate OPEN** · 12 new tests, 86 total green |
+| B8 | `[~]` | `getOwnContactDetails` (Lane A request) | | unblocks `A2b` |
 | B4 | `[ ]` | Actions | | |
 | B5 | `[ ]` | Session gate | | |
 | B6 | `[ ]` | Read model | | |
@@ -727,3 +728,48 @@ formatters and the zod pipeline are untested until `B3`/`B6` add their files. Mo
 `normalizePhone`'s leading-`0` and leading-`91` stripping (an 11-digit number starting `0` and a 12-digit
 one starting `91` are the two branches, and a `+910…` input hits neither), and `TRUCK_NUMBER_RE` against
 the newer BH-series and older three-letter-district plates, which it will reject.
+
+## B3 notes — the visibility rule
+
+`getDeal` implemented, and `contact.test.ts` added: 12 tests, 86 across the suite. **`A4`'s gate is open.**
+
+**The filtering is the query, not a check on data already fetched.** `getDeal` passes `dealWhere` as the
+`where` and selects the sensitive columns inside it, so for anyone the rule excludes the row simply does
+not come back — an unauthorised caller never has the phone number in memory at all. Writing it the other
+way round (fetch the auction, then decide) would work identically until the day someone adds a log line or
+an early return between the two halves.
+
+**Two decisions inside the query:**
+
+- **`role` is not selected**, and `DealParty.role` is derived from position — shipper, or the carrier whose
+  bid was accepted. The column is nullable, and the role that matters on a contact card is the one this
+  person played in *this deal*, which is a fact about the query's shape rather than about a column that
+  could in principle disagree with it. That removes a null case with no sensible answer.
+- **`iReviewed` rides the `@@unique([auctionId, authorId])` index** as a bare existence check, in the same
+  round trip. Not a second query, and not `count` — the answer is a boolean.
+
+**Both `OR` branches require an `ACCEPTED` bid, the shipper's branch included.** This is the subtle half of
+the rule and it has its own test. Without it, a shipper would see contact details on any row whose status
+column read `COMPLETED_ASSIGNED` — and a status column can be reached by a partial write or a manual fix,
+whereas an accepted bid actually names the counterparty.
+
+**The test interprets `dealWhere`'s returned object** rather than restating the rule a third time — the
+same device as `auction-close.test.ts`, for the same reason: the `WHERE` cannot execute in vitest, and a
+test that duplicates the rule in prose only proves the duplicate. It reads `where.id`, `where.status` and
+each `OR` branch's fields, and **throws** if the shape changes rather than silently passing. The sweep at
+the end asserts the negative directly: on every row, a losing carrier and a stranger match nothing.
+
+`vi.mock("@/lib/prisma")` at the top of the test file — `prisma.ts` throws at import time without
+`DATABASE_URL` and vitest does not load `.env.local`. Nothing here calls `getDeal`, so the client is
+stubbed rather than pointing the unit suite at a live database. **This is the first test in the repo to
+import a Prisma-touching module**; the next one will want the same three lines.
+
+**NOT VERIFIED (B3):** `typecheck`, `lint`, `test` (86, 8 files) green. `getDeal` itself has **never been
+executed** — the tests cover the rule, not the query, and the query is where the remaining risk is. Most
+likely to be wrong, in order: the nested `bids: { where: { status: "ACCEPTED" }, select: { carrier: … } }`
+shape under Prisma 7 (a typo here typechecks if the generated types are looser than expected); `iReviewed`
+reading `auction.reviews.length` when `reviews` is filtered by `authorId` — if that filter is ever dropped,
+it silently becomes "anyone reviewed"; and whether `findFirst` with an `OR` plus two relation `some`
+clauses picks up the indexes or table-scans, which is a performance question, not a correctness one.
+Cheapest real check: seed data from `B7`, then load a `COMPLETED_ASSIGNED` auction as the shipper, as the
+winning carrier, as a losing carrier, and as a stranger.
