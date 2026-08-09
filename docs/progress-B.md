@@ -644,7 +644,7 @@ by what would hurt most if wrong:
 | B8 | `[x]` | `getOwnContactDetails` (Lane A request) | | **`A2b` gate OPEN** |
 | B4 | `[x]` | Actions | | `updateContactDetails` + `submitReview` real |
 | B5 | `[x]` | Session gate | | ⚠ Lane A has 3 `homePathFor` call sites to update — see below |
-| B6 | `[ ]` | Read model | | |
+| B6 | `[x]` | Read model | | **`A3` gate OPEN** · 117 tests green · **Lane B complete** |
 | B7 | `[x]` | Seed fixtures | | **run against Neon** · 6 users, 9 auctions, 18 bids, 6 reviews · **`A6` gate OPEN** |
 
 ## B1 notes — schema + migration
@@ -994,3 +994,71 @@ only exercised reads, deliberately, because a write would have dirtied the fixtu
 Most likely to be wrong now: the `P2002` catch in `submitReview` (`B4` item 1), which needs two real
 submits; and whether auction 3's four-minute timer is still meaningful by the time anyone looks — re-run
 `npm run db:seed` before a timer sweep.
+
+## B6 notes — the ratings read model. **Lane B is complete.**
+
+`reviewsFor` real, `reviews.test.ts` added, and the formatter tests `B2` owed. 117 tests, 9 files, green.
+`A3`'s gate is open.
+
+**`reviewsFor` rides `@@index([subjectId, createdAt])` exactly** — same columns, same order, descending —
+so it is an index scan rather than a sort over everything a user has ever been sent. The author is
+flattened to `authorName` / `authorImage` rather than returned as a nested `include`, so a caller cannot
+hand a whole `User` row to a client component by accident.
+
+**It is deliberately not gated by Rule 1.** A shipper comparing four bids reads all four carriers' reviews
+*before* accepting anything — that is the feature. Reputation is public; contact details are not (§2).
+
+### The load-bearing test is the one about `raterSelect`
+
+`reviews.test.ts` asserts that `raterSelect` contains **no sensitive column**, and separately that
+`reviewsFor`'s author select contains none either. This is the leak the board calls "the one way this
+feature leaks", turned into something that can fail:
+
+`raterSelect` is spread into reads all over the app — every bid row, every auction detail screen — and
+none of those reads is gated by Rule 1, *correctly*, because ratings are public. So adding `phone: true`
+to it would put a phone number on every bid card in the product, silently, with no screen having done
+anything wrong and no reviewer necessarily noticing. A grep would catch it eventually; a test catches it
+on the commit.
+
+### Formatter tests, folded in from `B2`
+
+`B2`'s ledger named `normalizePhone`'s country-code branches and `TRUCK_NUMBER_RE`'s coverage as the two
+things most likely to be wrong, and then shipped neither with a test. A named suspect with no test is a
+guess, so `format.test.ts` gains 24 cases. Both suspects were real, and both are now **pinned as known
+behaviour rather than quietly changed**:
+
+- **`"+910…"` survives normalisation intact** — 13 digits matches neither the 12-digit `91` branch nor the
+  11-digit `0` branch. Left as is: it then fails validation with a clear message, which beats silently
+  accepting a number nobody meant to type.
+- **BH-series plates (`22BH1234AA`) do not group**, and come back normalised instead. Left as is:
+  `TRUCK_NUMBER_RE` rejects them at the form, so no such value can reach the formatter from our database.
+  If BH plates ever need supporting, the regex is the place, and this test will tell you when it lands.
+
+### Rule 1's grep, re-run across both lanes at feature completion
+
+`phone` / `truckNumber` / `companyName` under `src/app` and `src/components` hit **exactly the two
+sanctioned places** the board predicts and nowhere else: the details form (own input, no Prisma select)
+and `ContactCard` (rendering a `DealParty` that came from `getDeal`). The rest are prose in comments.
+Cross-checked the stronger form too — of the six files in `src/app` that write a Prisma `select:`, **none
+mentions a sensitive column**. Rule 1 is total.
+
+**NOT VERIFIED (B6):** `typecheck` / `lint` / `test` (117, 9 files) green. `reviewsFor` is tested against
+a mocked client, so its *arguments* and its *mapping* are proven but the query has never hit Postgres —
+`orderBy: { createdAt: "desc" }` with `take` against that composite index is the untested part, and it is
+a performance question rather than a correctness one. `npm run build` has **not** been run this session.
+
+## VERIFICATION WORKLIST — feature, Lane B side (B1–B8 complete)
+
+Green: `typecheck`, `lint`, `test` (117, 9 files), Rule 1's greps, the migration applied, the seed run, and
+**`getDeal` executed against real data (60 assertions)**.
+
+What is left, ranked by what would hurt most if wrong:
+
+1. **`submitReview` end to end, twice.** The only path in the feature that writes and has never run. Two
+   submits on one auction must produce one review, one increment, and a friendly "already rated" — the
+   `P2002` narrowing through the `pg` driver adapter is the specific unknown.
+2. **`ratingSum` after a real review.** Compare `ratingCount` against the row count in Studio once. If the
+   `$transaction` half-commits, the aggregate diverges permanently and nothing recomputes it.
+3. **`updateContactDetails` twice**, confirming `detailsCompletedAt` does not move on the second save.
+4. **No redirect loop** anywhere reachable from `/onboarding/details`.
+5. **`npm run build`** — not run since these landed.

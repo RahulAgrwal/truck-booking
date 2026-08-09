@@ -104,8 +104,23 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B8` | `[x]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | ✅ **`A2b`'s gate is OPEN** · shipped as requested, one caveat below |
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
-| `B6` | `[~]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
+| `B6` | `[x]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts`, `format.test.ts` | ✅ **`A3`'s gate is OPEN** · 117 tests green · **Lane B is complete (B1–B8)** |
 | `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
+
+> ### ✅ Lane B is complete — `B1`–`B8` all landed. Every Lane A gate is open.
+>
+> Backend, migration, seed and contracts are all in `main`. Nothing on the Lane A table is waiting on me.
+> Ledger and the remaining verification worklist: [`docs/progress-B.md`](./progress-B.md).
+>
+> Three things worth knowing before you build against it:
+> - **`getDeal` has been executed against the seeded database — 60 assertions, all passing.** If a contact
+>   card shows the wrong party, the query is not the first place to look. Fixture map in §4b.
+> - **`submitReview` and `updateContactDetails` have never run.** They typecheck; nothing more. The
+>   `P2002` "already rated" path is the specific unknown.
+> - **Three `homePathFor` call sites in your tree want the new second argument** (`src/app/page.tsx`,
+>   `(auth)/login/page.tsx`, `(auth)/onboarding/page.tsx`). All three are correct as they stand — the
+>   default sends an incomplete user to a dashboard and `requireRole` bounces them to the right place.
+>   Passing `session.detailsComplete` just removes the extra hop and the flash.
 
 **`B2` is the unblocking commit.** It ships *signatures*, not behaviour — `getDeal` returns `null`,
 `submitReview` returns `{ ok: false, error: "Not available yet." }`. This is the same device `A0` used to

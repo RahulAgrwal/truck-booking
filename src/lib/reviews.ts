@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 
 import { formatRating, ratingAverage } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
 
 /**
  * The ratings read model (docs/feature-contact-ratings.md §4).
@@ -53,12 +54,39 @@ export const REVIEWS_PAGE_SIZE = 5;
 /**
  * Reviews *received* by `userId`, newest first.
  *
- * STUB — `B6` implements the read. It returns an empty list rather than
- * throwing so Lane A can build and render the empty state against it, which is
- * a state the real function will produce constantly anyway.
+ * Rides the `@@index([subjectId, createdAt])` exactly: same column order, same
+ * direction, so this is an index scan rather than a sort over everything the
+ * user has ever been sent.
+ *
+ * **Not gated by Rule 1, and that is the point** (§2, Rule 2). A shipper
+ * deciding between four bids can read every one of those carriers' reviews
+ * before accepting anything — reputation is public, contact details are not.
+ * If a caller ever needs this behind a permission check, the check belongs at
+ * the caller, never here.
+ *
+ * The author is flattened rather than returned as a nested `include`, so
+ * callers cannot accidentally hand a whole `User` row to a client component.
  */
 export async function reviewsFor(userId: string, take: number = REVIEWS_PAGE_SIZE): Promise<ReviewRow[]> {
-  void userId;
-  void take;
-  return [];
+  const rows = await prisma.review.findMany({
+    where: { subjectId: userId },
+    orderBy: { createdAt: "desc" },
+    take,
+    select: {
+      id: true,
+      stars: true,
+      comment: true,
+      createdAt: true,
+      author: { select: { name: true, profileImage: true } },
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    stars: row.stars,
+    comment: row.comment,
+    createdAt: row.createdAt,
+    authorName: row.author.name,
+    authorImage: row.author.profileImage,
+  }));
 }
