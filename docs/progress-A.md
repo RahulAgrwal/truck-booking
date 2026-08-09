@@ -857,8 +857,8 @@ sign-in. The second could null a stored Google avatar on any token that momentar
 Also closed the Lane B → Lane A handoff: all four `homePathFor(session.role)` call sites now pass
 `session.detailsComplete` (`src/app/page.tsx`, `(auth)/login`, `(auth)/onboarding`, `(auth)/signup`).
 
-**NOT VERIFIED (E1):** `npm run build` was still running when this was committed — **check it before
-trusting this entry**; `typecheck`, `lint` and all 139 tests are green. Nothing has been rendered: no
+**NOT VERIFIED (E1):** the toolchain is green — `typecheck` ✅, `lint` ✅, `test` ✅ 139/11 files,
+`build` ✅ (17 routes, `/signup` present in `routes-manifest.json`). Nothing has been rendered: no
 390×844 pass, and **not one line of this has run against a real Firebase project**, because
 Email/Password must first be enabled in the console (feature doc §2) and `.env.local` still has
 `DEV_AUTH_BYPASS=true`, which makes `/login` redirect away before any of it is reachable.
