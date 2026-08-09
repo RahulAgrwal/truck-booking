@@ -15,19 +15,45 @@ import { colors } from "./tokens";
  * Assets referenced below all ship in `public/icons/` (B0).
  */
 
+const FALLBACK_SITE_URL = "http://localhost:3000";
+
 /**
  * Absolute base for OG/Twitter image URLs — relative paths are not valid in
  * social cards. Optional: unset it and OG images simply resolve against
  * localhost, which is correct for development and harmless in a build.
+ *
+ * **`||`, not `??`, and then a try/catch — both deliberate.** This used to read
+ * `process.env.NEXT_PUBLIC_SITE_URL ?? FALLBACK`, which looks equivalent and is
+ * not: `??` falls back only on null/undefined, so `NEXT_PUBLIC_SITE_URL=""` in
+ * `.env.local` produced `new URL("")`, which throws.
+ *
+ * That throw happens at **module scope in the root layout's import graph**, so
+ * it did not break the OG card — it 500'd *every route in the app*, including
+ * `/login`. An unset variable and a variable set to empty are the same
+ * intention, and neither is worth a total outage, so the parse is guarded too:
+ * a typo'd origin now degrades to localhost with a warning instead.
  */
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+function resolveSiteUrl(): URL {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim() || FALLBACK_SITE_URL;
+
+  try {
+    return new URL(configured);
+  } catch {
+    console.warn(
+      `[metadata] NEXT_PUBLIC_SITE_URL is not a valid absolute URL; falling back to ${FALLBACK_SITE_URL}.`,
+    );
+    return new URL(FALLBACK_SITE_URL);
+  }
+}
+
+const siteUrl = resolveSiteUrl();
 
 const title = "TruckingGO";
 const description =
   "Find loads. Book trucks. Instantly. Shippers post loads as timed reverse auctions; verified carriers bid the price down.";
 
 export const siteMetadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: siteUrl,
   applicationName: title,
   title: {
     // Screens set their own title; this frames it. `default` covers the root.
