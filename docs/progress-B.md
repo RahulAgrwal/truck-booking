@@ -641,7 +641,7 @@ by what would hurt most if wrong:
 | B1 | `[x]` | Schema + migration | `7a00aa1`+ | migration applied to Neon · **`B2` `B5` `B6` `B7` gates OPEN** |
 | B2 | `[x]` | Contracts + typed stubs | | **`A2` `A3` `A4` gates OPEN** · typecheck+lint+74 tests green |
 | B3 | `[x]` | Visibility rule | | **`A4` gate OPEN** · 12 new tests, 86 total green |
-| B8 | `[~]` | `getOwnContactDetails` (Lane A request) | | unblocks `A2b` |
+| B8 | `[x]` | `getOwnContactDetails` (Lane A request) | | **`A2b` gate OPEN** |
 | B4 | `[ ]` | Actions | | |
 | B5 | `[ ]` | Session gate | | |
 | B6 | `[ ]` | Read model | | |
@@ -773,3 +773,25 @@ it silently becomes "anyone reviewed"; and whether `findFirst` with an `OR` plus
 clauses picks up the indexes or table-scans, which is a performance question, not a correctness one.
 Cheapest real check: seed data from `B7`, then load a `COMPLETED_ASSIGNED` auction as the shipper, as the
 winning carrier, as a losing carrier, and as a stranger.
+
+## B8 notes — `getOwnContactDetails`, taken out of order
+
+Lane A's request in §4 of the board, and a correct one. Own details are not a Rule 1 read — the session
+*is* the authorization — so they could have queried it themselves. The argument for not doing so is the
+grep: Rule 1 is worth having only while **any** hit for `phone` / `truckNumber` / `companyName` under
+`src/app/` is a bug with no reading required. One legitimate exception and every future hit needs a human
+to adjudicate, which is the same as not having the check. Fifteen lines on this side keeps it total.
+
+Taken ahead of `B4` because `A2b` was sitting at `[!]` on it and it costs nothing; `B4` was not waiting on
+anything.
+
+**One widening of the spec, flagged on the board.** `OwnContactDetails.role` is `Role`, but the column is
+nullable, so a role-less user has no representation in that type. Rather than widen the type and make Lane
+A handle a case that cannot reach the screen, `null` now also means "no role yet" — those users belong at
+`/onboarding`, which `B5`'s guard sends them to. A user who has a role and has simply never filled the
+form still returns a record of nulls, which is the empty-form case they asked for.
+
+**NOT VERIFIED (B8):** `typecheck` / `lint` / `test` (86) green; no test of its own and none warranted —
+it is a keyed `findUnique` with no rule in it. Never executed. Most likely to be wrong: nothing in the
+query; the risk is entirely in the `null` contract above being read as "row missing" by `A2b` and
+rendering a blank form to a user who should have been redirected.

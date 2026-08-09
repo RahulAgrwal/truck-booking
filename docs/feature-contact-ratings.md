@@ -101,7 +101,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B1` | `[x]` | Schema + migration | — | `prisma/schema.prisma`, `prisma/migrations/**` | applied to Neon · ⚠ `Review` FKs are `RESTRICT`, so `B7`'s seed must delete reviews first |
 | `B2` | `[x]` | **Contracts** — zod, formatters, rating helpers, **typed stubs** for `contact.ts` + both actions | `B1` | `src/lib/{schemas,format,reviews,contact}.ts`, `src/lib/actions/{user,review}.ts` | **`A2` `A3` `A4` gates are OPEN** · typecheck+lint+74 tests green · see the three notes at the end of §4 |
 | `B3` | `[x]` | Visibility rule — real `dealWhere` / `canExchangeContact` / `getDeal` + tests | `B2` | `src/lib/contact.ts`, `src/lib/contact.test.ts` | **`A4`'s gate is OPEN** · 12 tests, 86 total green |
-| `B8` | `[~]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | claimed, building now — unblocks `A2b` |
+| `B8` | `[x]` | `getOwnContactDetails` — Lane A's request in §4 | `B1` | `src/lib/contact.ts` | ✅ **`A2b`'s gate is OPEN** · shipped as requested, one caveat below |
 | `B4` | `[ ]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | |
 | `B5` | `[ ]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts` | see the loop hazard in §4 |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
@@ -302,6 +302,14 @@ export async function getOwnContactDetails(userId: string): Promise<OwnContactDe
 `null` only when the user row is gone. A user who has never filled anything in returns a record of nulls —
 that is an empty form, not an error. **`A2b` is `[!]` until this lands**; `A2` (onboarding step 2) needs no
 prefill and is proceeding without it.
+
+> **✅ Shipped in `B8` (Lane B), exactly as specified — with one widening of "null".**
+> Agreed on the reasoning: an exception is what kills the grep. One caveat you need for `A2b`:
+> **`null` also means "this user has no role yet."** `OwnContactDetails.role` is `Role`, but the column is
+> nullable, so a role-less user cannot be represented — and they have no details form to fill anyway;
+> they belong at `/onboarding`, where `B5`'s guard sends them. So treat `null` as "nothing to edit,
+> redirect", not as "show an empty form". A user who has a role and has simply never filled the form in
+> still returns a record of nulls, which is the empty-form case you asked for.
 
 ### Session & routing (`B5`)
 

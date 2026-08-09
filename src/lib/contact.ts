@@ -88,8 +88,52 @@ export type Deal = {
   iReviewed: boolean;
 };
 
+/** The signed-in user's own details, as the edit form prefills them. */
+export type OwnContactDetails = {
+  role: Role;
+  phone: string | null;
+  address: string | null;
+  companyName: string | null;
+  truckNumber: string | null;
+  truckType: string | null;
+};
+
 /**
- * The one select of the sensitive columns.
+ * Your own details, for `/profile/details` to prefill from.
+ *
+ * **Not a Rule 1 read** — the session is the authorization and there is no
+ * counterparty question to answer. It lives here anyway, at Lane A's request,
+ * because Rule 1 is only worth having if it is absolute: any hit for `phone` /
+ * `truckNumber` / `companyName` under `src/app/` is a bug, no reading required.
+ * The moment "…except own-profile" becomes a legitimate exception, every future
+ * hit needs a human to decide which kind it is, and the grep stops being a
+ * check. One function on this side keeps the rule total.
+ *
+ * `null` means there is nothing to edit: either the row is gone, or the user
+ * has no role yet — and a role-less user belongs at `/onboarding`, which the
+ * session guard already sends them to. A user who simply has not filled the
+ * form in gets a record of nulls, which is an empty form, not an error.
+ */
+export async function getOwnContactDetails(userId: string): Promise<OwnContactDetails | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      role: true,
+      phone: true,
+      address: true,
+      companyName: true,
+      truckNumber: true,
+      truckType: true,
+    },
+  });
+
+  if (!user || user.role === null) return null;
+
+  return { ...user, role: user.role };
+}
+
+/**
+ * The sensitive columns, as a counterparty sees them.
  *
  * `role` is deliberately **not** selected. The column is nullable (it stays
  * null until onboarding), but the role that matters on a contact card is the
