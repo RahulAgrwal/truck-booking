@@ -48,6 +48,31 @@ function resolveSiteUrl(): URL {
 
 const siteUrl = resolveSiteUrl();
 
+/**
+ * The social card's absolute URL: `NEXT_PUBLIC_SITE_URL` + the route that
+ * `src/app/opengraph-image.tsx` is served from.
+ *
+ * Built from `siteUrl.origin` rather than the raw environment variable. Same
+ * value when the variable is set properly, but `.origin` normalises away a
+ * trailing slash — so `https://x.example.com/` cannot produce
+ * `https://x.example.com//opengraph-image` — and an unset or malformed
+ * variable still degrades to the localhost fallback instead of emitting a
+ * bare relative path, which is not a valid `og:image` at all.
+ */
+const OG_IMAGE_URL = `${siteUrl.origin}/opengraph-image`;
+
+/**
+ * Must match the `alt` and `size` exports of `src/app/opengraph-image.tsx`.
+ *
+ * Duplicated rather than imported: that module lives under `src/app/` (the
+ * other lane's tree) and, more importantly, it reads the icon off disk at
+ * module scope and pulls in `next/og` — importing it here would run both every
+ * time anything touched the metadata.
+ */
+const OG_ALT =
+  "TruckingGO — shippers post loads as timed reverse auctions, verified carriers bid the price down";
+const OG_SIZE = { width: 1200, height: 630 };
+
 const title = "TruckingGO";
 const description =
   "Find loads. Book trucks. Instantly. Shippers post loads as timed reverse auctions; verified carriers bid the price down.";
@@ -92,18 +117,25 @@ export const siteMetadata: Metadata = {
   },
 
   /*
-    No `images` here, deliberately — `src/app/opengraph-image.tsx` supplies it.
+    `images` points explicitly at `NEXT_PUBLIC_SITE_URL` + `/opengraph-image`,
+    the route `src/app/opengraph-image.tsx` serves.
 
-    The precedence runs the opposite way to what that file's comment used to
-    claim: an explicit `openGraph.images` **wins over** the file convention, it
-    does not lose to it. So while these keys listed `/icons/og-image.jpg`, the
-    generated 1200×630 card was built, served at `/opengraph-image`, and then
-    referenced by nothing — every share rendered the 512×512 square instead.
-    Verified against the served HTML: `og:image` pointed at the .jpg with
-    `og:image:width 512`.
+    Leaving it out would also work — the file convention fills in `og:image`
+    on its own, resolved against `metadataBase`, which is the same origin. It
+    is explicit anyway so the dependency on `NEXT_PUBLIC_SITE_URL` is visible
+    and greppable at the point it matters, rather than an emergent property of
+    how Next resolves a relative path.
 
-    Omitting `images` lets the file convention fill in `og:image`,
-    `twitter:image` and the correct 1200×630 dimensions on its own.
+    ⚠ **An explicit `images` overrides the file convention's metadata, so the
+    dimensions and alt below are now load-bearing.** This exact key once listed
+    `/icons/og-image.jpg` and shipped `og:image:width 512` against a 1200×630
+    card — the generated image was built, served, and referenced by nothing.
+    Change the URL here and you must change `OG_SIZE`/`OG_ALT` with it.
+
+    One deliberate loss: the file convention appends a content hash
+    (`?d2482b9559ea1c70`) that busts scraper caches when the card is redrawn.
+    A static URL does not, so a redesigned card may show stale in platforms
+    that cache aggressively until they re-scrape.
   */
   openGraph: {
     type: "website",
@@ -112,6 +144,15 @@ export const siteMetadata: Metadata = {
     description,
     url: "/",
     locale: "en_IN",
+    images: [
+      {
+        url: OG_IMAGE_URL,
+        width: OG_SIZE.width,
+        height: OG_SIZE.height,
+        alt: OG_ALT,
+        type: "image/png",
+      },
+    ],
   },
 
   twitter: {
@@ -121,6 +162,7 @@ export const siteMetadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
+    images: [{ url: OG_IMAGE_URL, alt: OG_ALT }],
   },
 
   // Only /login is reachable without a session; everything else redirects.

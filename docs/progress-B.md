@@ -1048,6 +1048,77 @@ a mocked client, so its *arguments* and its *mapping* are proven but the query h
 `orderBy: { createdAt: "desc" }` with `take` against that composite index is the untested part, and it is
 a performance question rather than a correctness one. `npm run build` has **not** been run this session.
 
+## Fix: `og:image` now derives explicitly from `NEXT_PUBLIC_SITE_URL` (user directive)
+
+**Reported symptom: the OG card does not render in link previews.** Diagnosed against the served HTML,
+then fixed in `src/lib/design/metadata.ts`.
+
+**The tags and the image were both already correct.** `/opengraph-image` returns `200`, `image/png`,
+63,569 bytes with a valid PNG signature, and the head carried `summary_large_image` at 1200×630 with the
+right alt. Nothing was wrong with the card or the metadata shape.
+
+**The origin was the whole problem.** `.env.local` carries `NEXT_PUBLIC_SITE_URL=""`, so `resolveSiteUrl()`
+falls back to `http://localhost:3000` and every absolute URL Next derives from `metadataBase` —
+`og:image`, `twitter:image`, `og:url` — pointed at a host no external scraper can reach. WhatsApp, Slack,
+Twitter and LinkedIn fetch that from their own servers, get nothing, and render a blank preview.
+
+**Bigger finding, recorded because it explains why nobody caught it: the app has never been deployed.**
+On project `truckinggo-web`, both `run.googleapis.com` and `secretmanager.googleapis.com` are **not
+enabled** — so there is no Cloud Run service and the `PUBLIC_SITE_URL` secret `cloudbuild.yaml` reads does
+not exist. `docs/gcp-setup.md` line 84 is still the placeholder. The pipeline is correctly *wired*
+(`--build-arg` → `ARG`/`ENV` → `next build`, which is right because `NEXT_PUBLIC_*` is inlined at compile
+time and a runtime `--set-secrets` would leave localhost baked into the bundle) — it has simply never run.
+
+### What changed
+
+`openGraph.images` and `twitter.images` are now explicit, built as `${siteUrl.origin}/opengraph-image`.
+
+Built from `siteUrl.origin`, **not** the raw environment variable, and that distinction is the substance
+of the change: `.origin` normalises a trailing slash, so `https://x/` cannot produce `https://x//…`; and an
+unset or malformed value still degrades to the localhost fallback rather than emitting a bare relative
+path, which is not a valid `og:image` at all.
+
+⚠ **An explicit `images` overrides the file convention's metadata, so `OG_SIZE` and `OG_ALT` are now
+load-bearing.** This exact key once listed `/icons/og-image.jpg` and shipped `og:image:width 512` against a
+1200×630 card. They are duplicated from `src/app/opengraph-image.tsx` rather than imported, because that
+module reads the icon off disk at module scope and pulls in `next/og` — importing it here would run both
+whenever anything touched the metadata. **Change one, change the other.**
+
+One deliberate loss: the file convention appended a content hash (`?d2482b9559ea1c70`) that busts scraper
+caches when the card is redrawn. A static URL does not, so a redesigned card may show stale until a
+platform re-scrapes.
+
+### Verified
+
+`typecheck` and `lint` pass. The dev server was down (Lane A restarting mid-`A6`), so resolution was
+checked by importing the module directly, **one process per value** — the first attempt used a `?v=`
+cache-buster on a dynamic import, which tsx's alias resolution stripped, so all six rows were the same
+cached module. That run proved nothing and was discarded; worth knowing before someone repeats it.
+
+| `NEXT_PUBLIC_SITE_URL` | `og:image` |
+|---|---|
+| unset | `http://localhost:3000/opengraph-image` |
+| `https://truckinggo-abc123.a.run.app` | `https://truckinggo-abc123.a.run.app/opengraph-image` |
+| `https://truckinggo-abc123.a.run.app/` | same — no `//` |
+| `not a url` | warns, falls back to localhost |
+
+`1200x630 image/png` survives in every case. The empty-string case is not separately in that table because
+PowerShell turns `$env:X = ""` into unsetting it — but `?.trim() ||` treats empty, whitespace and unset
+identically by construction, and `.env.local`'s `=""` demonstrably produced the localhost fallback in the
+served HTML before this change.
+
+**NOT VERIFIED:** the rendered head has **not** been re-checked, because the dev server never came back up
+during this change — the resolution is proven at the module level, not in an actual response. And **this
+does not fix the reported symptom on its own**: with `NEXT_PUBLIC_SITE_URL` still `""`, the emitted URL is
+`http://localhost:3000/opengraph-image` exactly as before. Setting that variable to a reachable public
+origin is the actual fix, and it needs a deploy — or a tunnel — to have one.
+
+Note the ordering trap for whoever deploys: the Cloud Run URL does not exist until the first deploy, but
+`NEXT_PUBLIC_*` must be present *at build time* to be inlined. So the first deploy bakes in localhost; set
+`PUBLIC_SITE_URL` to the real origin and deploy a second time. Unavoidable with a build-time constant —
+deriving the origin from `x-forwarded-host` in a `generateMetadata` function would remove it, at the cost
+of making the root layout dynamic and a one-line change in Lane A's `layout.tsx`. Not done; flagged.
+
 ## VERIFICATION WORKLIST — feature, Lane B side (B1–B8 complete)
 
 Green: `typecheck`, `lint`, `test` (117, 9 files), Rule 1's greps, the migration applied, the seed run, and
