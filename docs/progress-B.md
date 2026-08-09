@@ -645,7 +645,7 @@ by what would hurt most if wrong:
 | B4 | `[x]` | Actions | | `updateContactDetails` + `submitReview` real |
 | B5 | `[x]` | Session gate | | ⚠ Lane A has 3 `homePathFor` call sites to update — see below |
 | B6 | `[ ]` | Read model | | |
-| B7 | `[ ]` | Seed fixtures | | |
+| B7 | `[x]` | Seed fixtures | | **run against Neon** · 6 users, 9 auctions, 18 bids, 6 reviews · **`A6` gate OPEN** |
 
 ## B1 notes — schema + migration
 
@@ -929,3 +929,68 @@ incomplete user can still reach — worth a prompt there rather than a redirect.
 
 The `@@unique` constraint catches a double-tap race that `iReviewed` missed. Treat that specific message as
 success from the user's point of view — collapse the sheet, don't show an error banner.
+
+## B7 notes — seed fixtures, and Rule 1 executed for real
+
+**`npm run db:seed` was run** (announced in `445a35d` first): 6 users, 9 auctions, 18 bids, 6 reviews.
+Anything either lane had created by hand is gone. `A6`'s gate is open.
+
+`prisma.review.deleteMany()` goes first in the truncate — the `RESTRICT` hazard `B1` flagged, now handled.
+
+### Every seeded user except `newcomer` has contact details
+
+That is a deliberate consequence of `B5`: a seeded user without `detailsCompletedAt` cannot reach any
+dashboard. `newcomer@demo.test` remains role-less and detail-less, so `DEV_BYPASS_ROLE=NONE` walks the full
+chain — `/onboarding` → `setUserRole` → `/onboarding/details` → dashboard.
+
+### The five completed deals, and what each one is for
+
+Rule 1 only has anything to say about `COMPLETED_ASSIGNED` auctions with an accepted bid, so the seed now
+carries five, chosen to cover every state the feature can be in rather than to look plausible:
+
+| Auction | Shipper | Winner | shipper→carrier | carrier→shipper | Exercises |
+|---|---|---|---|---|---|
+| 5 Kolkata→Patna | shipper2 | carrier2 | 5★ | 4★ | both rate sheets collapsed |
+| 6 Nagpur→Nashik | shipper1 | carrier1 | 4★ | 5★ | both collapsed |
+| 7 Indore→Bhopal | shipper1 | carrier3 | — | — | **both sheets open** |
+| 8 Ludhiana→Chandigarh | shipper2 | carrier1 | — | 5★ | open for the shipper only |
+| 9 Coimbatore→Kochi | shipper1 | carrier2 | 4★ | — | open for the carrier only |
+
+Resulting reputations: carrier1 4.0 (1), carrier2 4.5 (2), shipper1 5.0 (1), shipper2 4.5 (2), and
+**carrier3 has no reviews at all** — deliberately, because "No ratings yet" is a first-class state and
+carrier3 has a live bid on auction 1, so it appears next to a real bid row rather than only on a profile.
+
+Auction 4 stays `CLOSED_EXPIRED` with two `PENDING` bids: the case where nobody won and Rule 1 must
+therefore reveal nothing to anyone, whatever the status column suggests.
+
+**`ratingSum`/`ratingCount` are computed from the review array, never typed in.** A seed that quietly broke
+that invariant would put a wrong number on every screen while every test still passed.
+
+### ✅ `getDeal` has now actually been executed — 60 assertions, all passing
+
+The largest open item from `B3` is retired. A throwaway script (`tsx --conditions=react-server`, which
+resolves `server-only` to its empty build the way `vitest.config.mts` does by alias) ran `getDeal` and
+`getOwnContactDetails` against the seeded database. Not committed — it is a one-shot, and keeping it would
+imply a test harness that does not exist. What it confirmed:
+
+- **18 Rule 1 cases**: both parties on all five completed deals get a `Deal`; losing carriers, strangers,
+  the expired auction and the two live auctions all get `null`. Including the two that matter most —
+  a losing carrier on a *completed* auction, and the shipper of an *expired* one.
+- **8 `iReviewed` cases**, one per party per deal, matching the table above exactly.
+- **Shape and symmetry**: `me`/`them` swap correctly by viewer, the shipper sees the carrier's truck
+  number and the carrier sees the shipper's company name, `truckNumber` is `null` on a shipper party,
+  and `amount` is the accepted bid (₹72,000), not the lowest.
+- **`getOwnContactDetails`**: real prefill for a carrier, `null` for the role-less user, `null` for an
+  unknown id.
+- **The aggregate invariant**, per user: `ratingSum`/`ratingCount` equals the sum and count of their
+  `Review` rows. Six users, twelve assertions.
+
+That also incidentally retires two `B3` suspects: the nested `bids: { where, select: { carrier } }` shape
+is correct under Prisma 7, and `iReviewed` is filtered by `authorId` as intended.
+
+**NOT VERIFIED (B7):** the seed ran and its output was verified by query, but **nothing has been rendered**.
+Untouched by the above: `submitReview` and `updateContactDetails` have still never executed — the script
+only exercised reads, deliberately, because a write would have dirtied the fixtures it had just verified.
+Most likely to be wrong now: the `P2002` catch in `submitReview` (`B4` item 1), which needs two real
+submits; and whether auction 3's four-minute timer is still meaningful by the time anyone looks — re-run
+`npm run db:seed` before a timer sweep.

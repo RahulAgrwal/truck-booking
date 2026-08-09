@@ -105,7 +105,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B4` | `[x]` | Actions — `updateContactDetails`, `submitReview` bodies | `B3` | `src/lib/actions/{user,review}.ts` | both real · `submitReview`'s authorization *is* `getDeal` · see the two notes below |
 | `B5` | `[x]` | Session gate — `detailsComplete`, `homePathFor`, `requireRole` redirect | `B1` | `src/lib/session.ts`, `src/lib/actions/user.ts` | ⚠ **every dashboard now redirects to `/onboarding/details` until `B7` seeds details** — the guard working, not a break |
 | `B6` | `[ ]` | Read model — `raterSelect`, `reviewsFor` + tests | `B1` | `src/lib/reviews.ts`, `src/lib/reviews.test.ts` | opens `A3` |
-| `B7` | `[~]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | **📣 ANNOUNCED — running now.** It truncates the shared Neon DB — anything you created by hand goes with it |
+| `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
 
 **`B2` is the unblocking commit.** It ships *signatures*, not behaviour — `getDeal` returns `null`,
 `submitReview` returns `{ ok: false, error: "Not available yet." }`. This is the same device `A0` used to
@@ -430,6 +430,35 @@ Related, for whoever owns the dev server: `next dev` refuses to start a second i
 directory, so the two lanes share one server and one env. `DEV_BYPASS_ROLE` is read at startup, which is
 why the `CARRIER` branch of the details form is unverified below — the running server is signed in as a
 shipper and Lane A will not restart another lane's process.
+
+---
+
+## 4b. Seed fixtures after `B7` — which user shows which state
+
+`npm run db:seed` has been run. Every user except `newcomer@demo.test` has contact details, because `B5`'s
+guard means a user without them cannot reach a dashboard at all.
+
+**Five completed deals**, chosen to cover every state rather than to look plausible:
+
+| Auction | Shipper | Winner | shipper→carrier | carrier→shipper | What it's for |
+|---|---|---|---|---|---|
+| 5 Kolkata→Patna | shipper2 | carrier2 | 5★ | 4★ | both rate sheets **collapsed** |
+| 6 Nagpur→Nashik | shipper1 | carrier1 | 4★ | 5★ | both collapsed |
+| 7 Indore→Bhopal | shipper1 | carrier3 | — | — | **both sheets open** |
+| 8 Ludhiana→Chandigarh | shipper2 | carrier1 | — | 5★ | open for the **shipper** only |
+| 9 Coimbatore→Kochi | shipper1 | carrier2 | 4★ | — | open for the **carrier** only |
+
+Reputations: carrier1 **4.0 (1)** · carrier2 **4.5 (2)** · shipper1 **5.0 (1)** · shipper2 **4.5 (2)** ·
+**carrier3 has none at all**, on purpose — it has a live bid on auction 1, so `A3` can see "No ratings yet"
+next to a real bid row rather than only on a profile.
+
+Auction 4 stays `CLOSED_EXPIRED` with two `PENDING` bids: nobody won, so no contact card for anyone.
+Auction 3 still expires ~4 minutes after seeding — **re-run `npm run db:seed` before a timer sweep**.
+
+**`getDeal` has been executed against this data — 60 assertions, all passing** (see `docs/progress-B.md`,
+B7 notes). Both parties on all five deals get a `Deal`; losing carriers, strangers, the expired auction
+and the two live ones all get `null`; `me`/`them` swap correctly by viewer. So if `A4`'s contact card shows
+the wrong thing, the query is not where to look first.
 
 ---
 
