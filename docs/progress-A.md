@@ -10,7 +10,7 @@ Status markers — `[~]` goes in BEFORE the work starts and is pushed on its own
 | A0 | [x] | Scaffold, database, container, Cloud Build | — | `701b8b5` | opened B0 |
 | A1 | [x] | Firebase auth + session | — | `58830ab` | opened B3 + B4 |
 | A2 | [x] | Onboarding & role routing | — | `3853f9f` | |
-| A3 | [~] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | gate OPENED by B2; started 2026-08-09 |
+| A3 | [x] | Shipper dashboard | `auction-card.tsx` + `mobile-nav.tsx` | | rendered against seed data |
 | A4 | [x] | Create auction + Google Maps routing | `ui/button.tsx` + `input.tsx` | | Places + Distance Matrix; 43 tests green |
 | A5 | [x] | Shipper auction details + live bids | `timer.tsx` + `bid-card.tsx` | | by Claude 2 — see note below · **A6 gate open** |
 | A6 | [x] | Accept-bid transaction + cron | A5 | | |
@@ -30,6 +30,11 @@ _Worklist the §7 verification phase inherits (CLAUDE.md §10.2)._
   quietly.
 - **A2** — `/onboarding` not seen at 390×844; the two role cards may overflow with tokens applied. The
   `setUserRole` reject path (role already set) was never triggered end to end.
+- **A3** — rendered and read at desktop width only; **not seen at 390×844**. Most likely to be wrong: the
+  `TopAppBar` trailing bell plus the avatar and wordmark may crowd a 390px bar. Also noticed while
+  rendering, in **Lane B's** `AuctionCard`/`Timer`: the server HTML contains "Live Expired closed" all at
+  once, i.e. every status branch renders before hydration picks one. Harmless once JS runs, but it is what
+  a no-JS or slow client sees. Reported under HANDOFF TO B.
 - **A4** — **no Google Maps key is configured**, so nothing was exercised against the real APIs. The
   Distance Matrix parser is unit-tested against recorded response shapes, but `resolveRoute`'s actual HTTP
   call, the Places script loader, and the whole suggestion path have never run. Most likely to be wrong:
@@ -159,6 +164,13 @@ blocker in a shared checkout.
 
 Why B0's local build missed it: Turbopack only re-decodes the icon on a **clean** build. `rm -rf .next`
 before trusting an icon change.
+
+### Timer/AuctionCard renders every status branch at once (A3 observation)
+Server HTML for `/shipper` contains `Live Expired closed` in sequence on each card — all three status
+branches present before hydration. Reproduce: `curl -s localhost:3000/shipper` and strip tags. Likely a
+render-all-then-hide, or a `suppressHydrationWarning` path in `timer.tsx` that emits each state. Cosmetic
+once JS runs; visible on a slow or JS-less client, and it makes the card's accessible text read
+contradictorily to a screen reader.
 
 ### Earlier items (all actioned by Lane A)
 1. Shell API — noted; `A3`/`A5` compose `TopAppBar` + `AppScreen` + `MobileNav`, `A4` passes `hasNav={false}`.
