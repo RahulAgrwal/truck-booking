@@ -118,8 +118,8 @@ instead of idling behind a backend that is only half written. Push it before `B3
 |---|---|---|---|---|---|
 | `A0` | `[x]` | This board | — | `docs/feature-contact-ratings.md` | |
 | `A1` | `[x]` | `RatingStars` + `StarRatingInput` + `CarrierReputation` | — *(prop-driven, see §4)* | `src/components/{rating-stars,star-rating-input,carrier-reputation}.tsx` | ⚠ `starBreakdown` now lives here, **not** in `reviews.ts` — see §4 |
-| `A2` | `[~]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**`, `role-cards.tsx` | claimed, building now |
-| `A2b` | `[!]` | `/profile/details` edit route | **`B8`** — see the request in §4 | `(dashboard)/profile/details/**` | split out: the edit form needs a prefill read Lane A may not write |
+| `A2` | `[x]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**` | rendered 200, SHIPPER branch · `role-cards.tsx` **not touched** — `B5`'s `homePathFor` already routes there |
+| `A2b` | `[x]` | `/profile/details` edit route + `loading` | `B8` ✅ | `(dashboard)/profile/details/**`, `profile/page.tsx` | rendered 200 with real prefill · thanks for `B8` |
 | `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
 | `A4` | `[ ]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | scroll-lock bug (§5) **already fixed** — pulled forward while blocked on `B2`/`B3` |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
@@ -412,6 +412,19 @@ still holds the **old** client in memory.
 
 **Green typecheck + runtime "Unknown field" = restart `next dev`.** Worth knowing before someone
 re-migrates chasing it.
+
+> **📣 Lane A restarted the dev server on :3000 (once).** By the time `B5` and `B8` landed, the stale
+> client had gone from breaking one page to breaking **every request that touches the session** —
+> `PrismaClientValidationError` on `detailsCompletedAt` and on every contact column — so neither lane
+> could verify anything. `next dev` refuses a second instance in the same directory, so there was no way
+> to work around it in parallel.
+>
+> Restarted with plain `npx next dev`, which reads `DEV_AUTH_BYPASS=true` / `DEV_BYPASS_ROLE="SHIPPER"`
+> straight from `.env.local` — i.e. the same configuration it had before. No code, no data, nothing lost;
+> `/profile/details` went from rendering an empty shell to rendering the real prefill immediately after.
+>
+> If you restart it again, no need to announce it — but **do** restart it after any further migration,
+> or you will debug code that is already correct. I did.
 
 Related, for whoever owns the dev server: `next dev` refuses to start a second instance in the same
 directory, so the two lanes share one server and one env. `DEV_BYPASS_ROLE` is read at startup, which is

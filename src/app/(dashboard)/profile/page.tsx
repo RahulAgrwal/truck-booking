@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -79,6 +80,23 @@ export default async function ProfilePage() {
             your {session.role === "SHIPPER" ? "auctions" : "bids"}.
           </p>
         </section>
+
+        {/*
+          The way into the edit form. Deliberately a navigation row rather than
+          the values themselves: the full details section, with the rating
+          block beside it, is A5's job. Until then this makes the route
+          reachable, which an unreachable screen is not.
+        */}
+        <Link
+          href="/profile/details"
+          className="flex h-touch-target-min items-center justify-between gap-stack-sm rounded-lg border border-surface-variant bg-surface-container-lowest px-stack-md shadow-[0_4px_12px_rgba(0,33,83,0.08)] transition-transform active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-stack-sm font-body-lg text-body-lg text-on-surface">
+            <Icon name="contact_phone" className="text-[18px]" />
+            Contact details
+          </span>
+          <Icon name="chevron_right" className="text-on-surface-variant" />
+        </Link>
 
         <SignOutButton />
       </AppScreen>
