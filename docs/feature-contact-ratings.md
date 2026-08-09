@@ -136,7 +136,7 @@ instead of idling behind a backend that is only half written. Push it before `B3
 | `A2` | `[x]` | Details form + onboarding step 2 | `B2` | `(auth)/onboarding/details/**` | rendered 200, SHIPPER branch · `role-cards.tsx` **not touched** — `B5`'s `homePathFor` already routes there |
 | `A2b` | `[x]` | `/profile/details` edit route + `loading` | `B8` ✅ | `(dashboard)/profile/details/**`, `profile/page.tsx` | rendered 200 with real prefill · thanks for `B8` |
 | `A3` | `[ ]` | **Ratings at the decision moment** — bid rows + accept sheet | `A1`, `B6` | `bid-card.tsx`, `shipper/auction/[id]/{page,accept-bid-sheet}.tsx` | |
-| `A4` | `[~]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | scroll-lock bug (§5) **already fixed** — pulled forward while blocked on `B2`/`B3` |
+| `A4` | `[x]` | Contact card + rate sheet on both auction detail screens | `A1`, `B3` ✅ | `src/components/{contact-card,review-sheet}.tsx`, both `auction/[id]/page.tsx` | **Rule 1 verified in-browser both directions — see §4c** · scroll-lock bug (§5) fixed earlier |
 | `A5` | `[ ]` | Entry points — history, My Bids "Won", profile rating block | `A4` | `shipper/history`, `carrier/bids`, `profile/page.tsx` | |
 | `A6` | `[ ]` | State coverage + 390×844 sweep + a11y | `A5`, `B7` | every touched route's `loading` / `error` | |
 
@@ -474,6 +474,35 @@ Auction 3 still expires ~4 minutes after seeding — **re-run `npm run db:seed` 
 B7 notes). Both parties on all five deals get a `Deal`; losing carriers, strangers, the expired auction
 and the two live ones all get `null`; `me`/`them` swap correctly by viewer. So if `A4`'s contact card shows
 the wrong thing, the query is not where to look first.
+
+---
+
+## 4c. Rule 1, verified against the seeded database (`A4`)
+
+Not reasoned — rendered, with `curl`, against `B7`'s fixtures. Both directions, winner and loser.
+
+| Viewer | Auction | Sees | Verdict |
+|---|---|---|---|
+| `shipper1` | `56e995fc` assigned to Coastal Carriers | "Your carrier", plate **TN 09 EF 9012**, Trailer, "Based at Anna Salai, Chennai 600002", `tel:+919840112233`, *No ratings yet* | ✅ |
+| `shipper1` | `a46d4bdc` assigned to Rajesh Transport | rating `4.0 out of 5, 1 rating`, `tel:+919812345670`, **"You've rated this job"** done-state | ✅ |
+| `shipper1` | Surat→Ahmedabad, **`CLOSED_EXPIRED`** | 0 `tel:` links · 0 "Your carrier" · page reads "Auction expired" | ✅ nobody won ⇒ nothing revealed |
+| `carrier1` **winner** | `a46d4bdc` | "You won this load", "Agreed at ₹95,000", "Your shipper", `tel:+919820011223` | ✅ symmetric |
+| `carrier1` **loser** | `56e995fc` (Coastal won) | 0 `tel:` · 0 "Your shipper" · 0 hits for `Coastal`, `Anand`, `Andheri` · only "This auction has closed." | ✅ **the case that matters** |
+
+The expired-auction row is worth keeping: the page fully rendered (40 text nodes of real content), so the
+zero counts are a real absence and not a skeleton that hadn't resolved. A negative test against a page
+that never rendered proves nothing, and the first attempt at this one *was* that — caught by checking the
+body rather than trusting the 200.
+
+`grep -rln "select:" src/app | xargs grep -ln "phone"` → empty. 117 tests green across 9 files.
+
+**NOT VERIFIED (A4):** (1) nothing at 390×844 — all of the above is `curl`, so the card's layout, the
+plate chip's `tracking-[0.2em]`, and whether the 56px call button and the rate sheet coexist above the
+fold are unseen; (2) the rate sheet was never *submitted* — `submitReview` is real (`B4`) and the
+already-rated done state renders from seeded data, but no review has been written through the UI, so the
+`P2002` duplicate path and `router.refresh()` swapping the button for the done state are unproven;
+(3) `StarRatingInput` has never been tapped — the focus ring and the half-star glyphs are still
+theoretical (`A1` note 2/3); (4) the `party.phone === null` fallback is unreachable with seeded data.
 
 ---
 

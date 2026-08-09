@@ -2,13 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { ContactCard } from "@/components/contact-card";
 import { PollingRefresher } from "@/components/polling-refresher";
+import { ReviewSheet } from "@/components/review-sheet";
 import { RouteMapDisclosure } from "@/components/route-map-disclosure";
 import { Timer } from "@/components/timer";
 import { Icon } from "@/components/ui/icon";
 import { isPastDeadline } from "@/lib/auction-close";
+import { getDeal } from "@/lib/contact";
 import { formatRouteSummary } from "@/lib/design/feed";
-import { formatWeight } from "@/lib/format";
+import { formatINR, formatWeight } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 
@@ -68,6 +71,14 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
   */
   const expired = auction.status !== "ACTIVE" || isPastDeadline(auction.endTime);
   const lowestBid = auction.bids[0]?.amount ?? null;
+
+  /*
+    Did *this* carrier win? `getDeal` answers it and hands back the shipper's
+    details in the same call — non-null only for the winner, so a losing
+    carrier on this same URL falls through to the plain "auction closed" box
+    and learns nothing about who took the load.
+  */
+  const deal = await getDeal(auction.id, session.userId);
 
   /*
     All four or none. A map drawn from a half-geocoded auction would be a
@@ -159,7 +170,40 @@ export default async function PlaceBidPage({ params }: { params: Promise<{ id: s
           </div>
         ) : null}
 
-        {expired ? (
+        {deal ? (
+          /*
+            Won it. This replaces the "auction closed" box entirely — the load
+            did not close on this carrier, it was awarded to them, and telling
+            them "no further bids can be placed" would be technically true and
+            completely the wrong news.
+          */
+          <div className="flex flex-col gap-stack-md">
+            <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-tertiary-container p-stack-md text-center">
+              <Icon name="check_circle" filled className="text-on-tertiary-container" />
+              <p className="font-headline-md text-headline-md text-on-tertiary-container">
+                You won this load
+              </p>
+              <p className="font-body-md text-body-md text-on-tertiary-container">
+                Agreed at {formatINR(deal.amount)}. Contact the shipper to arrange pickup.
+              </p>
+            </div>
+
+            <ContactCard party={deal.them} title="Your shipper" />
+
+            <ReviewSheet
+              auctionId={auction.id}
+              subjectName={deal.them.name}
+              alreadyReviewed={deal.iReviewed}
+            />
+
+            <Link
+              href="/carrier/bids"
+              className="text-center font-label-bold text-label-bold uppercase tracking-wider text-primary underline"
+            >
+              Back to my bids
+            </Link>
+          </div>
+        ) : expired ? (
           <div className="flex flex-col items-center gap-stack-sm rounded-lg bg-error-container p-stack-md text-center">
             <Icon name="timer_off" filled className="text-on-error-container" />
             <p className="font-body-lg text-body-lg text-on-error-container">

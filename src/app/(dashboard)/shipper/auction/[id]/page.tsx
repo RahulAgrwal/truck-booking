@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { AppScreen, NotificationBell, TopAppBar, Wordmark } from "@/components/app-shell";
 import { BidCard } from "@/components/bid-card";
+import { ContactCard } from "@/components/contact-card";
+import { ReviewSheet } from "@/components/review-sheet";
 import { MobileNav } from "@/components/mobile-nav";
 import { PollingRefresher } from "@/components/polling-refresher";
 import { Timer } from "@/components/timer";
@@ -11,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { isPastDeadline } from "@/lib/auction-close";
 import { bestBidId, latestBidPerCarrier } from "@/lib/bids";
+import { getDeal } from "@/lib/contact";
 import { formatRouteSummary } from "@/lib/design/feed";
 import { formatINR, formatWeight } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -55,6 +58,14 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
   const expired = isPastDeadline(auction.endTime);
   const live = auction.status === "ACTIVE" && !expired;
   const acceptedBid = auction.bids.find((bid) => bid.status === "ACCEPTED") ?? null;
+
+  /*
+    Rule 1, decided in one place. This returns null for every state except
+    "this auction is assigned and I am one of its two parties", so the page
+    does not re-derive the condition from `auction.status` — one rule, one
+    implementation, and no chance of the two drifting apart.
+  */
+  const deal = await getDeal(auction.id, session.userId);
 
   return (
     <>
@@ -120,6 +131,22 @@ export default async function ShipperAuctionPage({ params }: { params: Promise<{
                 : "The deadline passed without a bid being accepted. Nobody won."
             }
           />
+        ) : null}
+
+        {/*
+          The contact exchange. Sits directly under the "Assigned" banner
+          because from this moment the screen's job changes: it stops being an
+          auction to watch and becomes a job to arrange.
+        */}
+        {deal ? (
+          <>
+            <ContactCard party={deal.them} title="Your carrier" />
+            <ReviewSheet
+              auctionId={auction.id}
+              subjectName={deal.them.name}
+              alreadyReviewed={deal.iReviewed}
+            />
+          </>
         ) : null}
 
         <section className="flex flex-col gap-stack-md">
