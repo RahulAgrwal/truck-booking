@@ -643,7 +643,7 @@ by what would hurt most if wrong:
 | B3 | `[x]` | Visibility rule | | **`A4` gate OPEN** · 12 new tests, 86 total green |
 | B8 | `[x]` | `getOwnContactDetails` (Lane A request) | | **`A2b` gate OPEN** |
 | B4 | `[x]` | Actions | | `updateContactDetails` + `submitReview` real |
-| B5 | `[ ]` | Session gate | | |
+| B5 | `[x]` | Session gate | | ⚠ Lane A has 3 `homePathFor` call sites to update — see below |
 | B6 | `[ ]` | Read model | | |
 | B7 | `[ ]` | Seed fixtures | | |
 
@@ -863,3 +863,69 @@ Ranked by what would hurt most if wrong:
    timestamp does not move.
 4. **The role-mismatch branch**, which no UI can reach — it needs the action called directly with a
    `role: "SHIPPER"` payload from a carrier session.
+
+## B5 notes — the session gate
+
+`Session` gains `detailsComplete`, `homePathFor` gains a second argument, and `requireRole` redirects to
+`/onboarding/details`. That last line is what makes step 2 **required** rather than a suggestion on one
+screen — without it, a user could simply never visit the form and every contact card in the app would show
+a row of nulls.
+
+**Order inside `requireRole`: role → wrong-side → details.** A user on the wrong half of the app is sent
+to their own half *before* being asked for a truck number; being redirected to a form from a screen you
+were not entitled to see in the first place is a confusing way to learn either fact.
+
+**The loop hazard is real and is now load-bearing.** `requireRole` redirects to `/onboarding/details`, so
+that page — and `/profile/details` — must call `requireSession`. Both already do; I checked Lane A's two
+routes rather than trusting the note. The comment naming the hazard is on `requireRole` itself, which is
+where someone about to make the mistake will be looking.
+
+**`homePathFor(role, detailsComplete = true)` defaults fail-open**, which I would normally refuse. It is
+acceptable here only because `requireRole` catches it: forgetting the argument costs one redundant
+redirect, not an ungated screen. The board specified the default and the reasoning holds — but it is the
+reason the three call sites below matter for polish rather than for safety.
+
+Three of my own call sites now pass it: `createSession` (a returning user who never finished step 2),
+`setUserRole` (which now hands straight to step 2 instead of to a dashboard), and `updateContactDetails`
+(explicit `true` — details are complete as of that write).
+
+**NOT VERIFIED (B5):** `typecheck` / `lint` / `test` (86, 8 files) green. No redirect has been exercised.
+Most likely to be wrong: **an infinite redirect**, if any route reachable from `/onboarding/details` calls
+`requireRole` — the two details pages are clean, but a shared layout or a Server Action invoked from that
+form would do it too, and `createAuction` / `acceptBid` both call `requireRole` (correctly: a user without
+details should not be able to transact). Second: every seeded user has `detailsCompletedAt = null` until
+`B7` runs, so **as of this commit `DEV_AUTH_BYPASS` sends every dashboard straight to the details form.**
+That is the guard working, but it will look like a broken app until `B7` lands.
+
+## 📤 HANDOFF TO A — feature scope
+
+### 1. ⚠ Every dashboard now redirects to `/onboarding/details` (until `B7`)
+
+`B5` shipped the guard; no user in the database has `detailsCompletedAt` set yet. So from `d699aef`
+onwards, `DEV_AUTH_BYPASS` lands on the details form whatever you were trying to open. **This is the guard
+working, not a break.** `B7` is next and gives every seeded user details; after it, `shipper1` / `carrier1`
+land on their dashboards normally and `newcomer@demo.test` stays role-less for testing the flow.
+
+### 2. Three `homePathFor` call sites in your tree want the new second argument
+
+```
+src/app/page.tsx:12                    homePathFor(session.role)
+src/app/(auth)/login/page.tsx:17       homePathFor(session.role)
+src/app/(auth)/onboarding/page.tsx:14  homePathFor(session.role)
+```
+
+`homePathFor(role, detailsComplete = true)`. All three compile and none is *wrong* — the default is
+`true`, so an incomplete user is sent to a dashboard and `requireRole` immediately bounces them to
+`/onboarding/details`. Correct destination, one wasted round trip and a visible flash. Pass
+`session.detailsComplete` and it goes direct. Not urgent, and I have not touched them.
+
+### 3. `Session` gained `detailsComplete: boolean`
+
+Derived from `detailsCompletedAt !== null`. Useful for a "complete your profile" nudge on `/profile`
+without a query. Note `/profile` uses `requireSession`, so it is one of the few dashboard screens an
+incomplete user can still reach — worth a prompt there rather than a redirect.
+
+### 4. `submitReview` can return "already rated" even when the sheet thought otherwise
+
+The `@@unique` constraint catches a double-tap race that `iReviewed` missed. Treat that specific message as
+success from the user's point of view — collapse the sheet, don't show an error banner.

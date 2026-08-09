@@ -66,7 +66,13 @@ export async function createSession(idToken: string): Promise<ActionResult<{ nex
       maxAge: SESSION_MAX_AGE_MS / 1000,
     });
 
-    return { ok: true, data: { next: homePathFor(user.role) } };
+    // The second argument matters here: a returning user who never finished
+    // onboarding step 2 must land on the details form, not on a dashboard the
+    // guard immediately bounces them off.
+    return {
+      ok: true,
+      data: { next: homePathFor(user.role, user.detailsCompletedAt !== null) },
+    };
   } catch (error) {
     console.error("[createSession]", error);
     return { ok: false, error: "Could not sign you in. Please try again." };
@@ -93,7 +99,12 @@ export async function setUserRole(input: unknown): Promise<ActionResult<{ next: 
   });
 
   revalidatePath("/", "layout");
-  return { ok: true, data: { next: homePathFor(user.role) } };
+  // A user who has just picked a role has no details, so this hands straight
+  // over to onboarding step 2 rather than to a dashboard.
+  return {
+    ok: true,
+    data: { next: homePathFor(user.role, user.detailsCompletedAt !== null) },
+  };
 }
 
 /**
@@ -156,7 +167,8 @@ export async function updateContactDetails(input: unknown): Promise<ActionResult
   // The session carries detailsComplete, so the whole tree's guards change.
   revalidatePath("/", "layout");
 
-  return { ok: true, data: { next: homePathFor(current.role) } };
+  // Details are complete as of this write, whatever they were a moment ago.
+  return { ok: true, data: { next: homePathFor(current.role, true) } };
 }
 
 /** Clear the cookie and revoke refresh tokens, so the session dies everywhere. */

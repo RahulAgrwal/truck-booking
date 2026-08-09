@@ -18,6 +18,16 @@ export type Session = {
   name: string;
   profileImage: string | null;
   role: Role | null;
+  /**
+   * Has onboarding step 2 been completed? Derived from `detailsCompletedAt`,
+   * exposed as a boolean because that is the only question anything asks —
+   * the timestamp itself is nobody's business outside `updateContactDetails`.
+   *
+   * Contact details are the point of the whole exchange feature, so a user
+   * without them is a user the marketplace cannot complete a job for. That is
+   * why this is in the session rather than looked up per screen.
+   */
+  detailsComplete: boolean;
 };
 
 /**
@@ -65,6 +75,7 @@ async function getBypassSession(): Promise<Session | null> {
     name: user.name,
     profileImage: user.profileImage,
     role: user.role,
+    detailsComplete: user.detailsCompletedAt !== null,
   };
 }
 
@@ -92,6 +103,7 @@ export async function getSession(): Promise<Session | null> {
       name: user.name,
       profileImage: user.profileImage,
       role: user.role,
+      detailsComplete: user.detailsCompletedAt !== null,
     };
   } catch {
     return null;
@@ -108,17 +120,38 @@ export async function requireSession(): Promise<Session> {
 /**
  * Session with a specific role, or redirect. Role separation lives here rather
  * than in middleware, which cannot run the Admin SDK on the Edge runtime.
+ *
+ * The details check is what makes onboarding step 2 *required* rather than a
+ * suggestion on one screen. It is last, because a user who is on the wrong
+ * side of the app should be sent to their own side before being asked for
+ * anything.
+ *
+ * ⚠ **`/onboarding/details` and `/profile/details` must call `requireSession`,
+ * never this.** Guarding the details form with the guard that redirects to the
+ * details form is an infinite redirect.
  */
 export async function requireRole(role: Role): Promise<Session> {
   const session = await requireSession();
   if (session.role === null) redirect("/onboarding");
   if (session.role !== role) redirect(session.role === "SHIPPER" ? "/shipper" : "/carrier");
+  if (!session.detailsComplete) redirect("/onboarding/details");
   return session;
 }
 
-/** Where a session belongs right now. */
-export function homePathFor(role: Role | null): string {
-  if (role === "SHIPPER") return "/shipper";
-  if (role === "CARRIER") return "/carrier";
-  return "/onboarding";
+/**
+ * Where a session belongs right now.
+ *
+ * Role first, then details: a user picks a side before being asked for a truck
+ * number, and `setUserRole` hands straight over to step 2.
+ *
+ * `detailsComplete` defaults to `true` so existing call sites keep compiling,
+ * which is a fail-*open* default — forget to pass it and the user reaches a
+ * dashboard. That is survivable only because `requireRole` bounces them
+ * straight back, so the cost of forgetting is one redundant hop, not an
+ * ungated screen. Pass it anyway.
+ */
+export function homePathFor(role: Role | null, detailsComplete: boolean = true): string {
+  if (role === null) return "/onboarding";
+  if (!detailsComplete) return "/onboarding/details";
+  return role === "SHIPPER" ? "/shipper" : "/carrier";
 }
