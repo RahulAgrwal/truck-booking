@@ -646,6 +646,7 @@ by what would hurt most if wrong:
 | B5 | `[x]` | Session gate | | ⚠ Lane A has 3 `homePathFor` call sites to update — see below |
 | B6 | `[x]` | Read model | | **`A3` gate OPEN** · 117 tests green · **Lane B complete** |
 | B7 | `[x]` | Seed fixtures | | **run against Neon** · 6 users, 9 auctions, 18 bids, 6 reviews · **`A6` gate OPEN** |
+| B9 | `[x]` | `getCarrierReviews` (Lane A request) | | fetch-on-open for the accept sheet · 119 tests green |
 
 ## B1 notes — schema + migration
 
@@ -1062,3 +1063,34 @@ What is left, ranked by what would hurt most if wrong:
 3. **`updateContactDetails` twice**, confirming `detailsCompletedAt` does not move on the second save.
 4. **No redirect loop** anywhere reachable from `/onboarding/details`.
 5. **`npm run build`** — not run since these landed.
+
+## B9 notes — `getCarrierReviews`, taken out of order
+
+Lane A's `A3` request, and the reasoning is right: their auction detail page mounts `PollingRefresher`, so
+reading three reviews per bidding carrier *in the page* would be one query per carrier every seven
+seconds, forever, to fill sheets that mostly never open. Fetch-on-open costs one query at the moment
+someone asks. Taken immediately because it is fifteen lines and `A3` ships without it either way.
+
+**Deviation 1 — `requireSession()`, not `requireRole("SHIPPER")` as requested.** Two independent reasons,
+either sufficient. `requireRole` now redirects a details-incomplete user to `/onboarding/details` (`B5`),
+and a *data fetch* that navigates the page out from under an open sheet is a bad failure mode — worse than
+the problem the guard would solve. And SHIPPER would not be a security boundary here: reviews are public
+(§2, Rule 2), so the check would read like protection while protecting nothing, and the next person to
+want this list from a carrier screen would have to work out whether deleting it was safe. It is strictly
+more permissive than requested, so no Lane A caller can break on it.
+
+**Deviation 2 — the return type is `SerializedReviewRow[]`.** The request said `ActionResult<ReviewRow[]>`
+*and* "serialise `createdAt` as an ISO string", which are two different types. Rather than a signature
+that lies, `SerializedReviewRow = Omit<ReviewRow, "createdAt"> & { createdAt: string }` is exported
+alongside it. An absolute instant, never a precomputed "3 days ago" — RSC payloads are cached, so a
+relative string goes stale inside one (CLAUDE.md §6). Tested.
+
+`take` is bounded 1–20 in `CarrierReviewsSchema`. The caller is our own sheet, but it reaches the server
+as an untrusted number like any other, and unbounded is a way to ask for every review a carrier ever got.
+
+**NOT VERIFIED (B9):** `typecheck` / `lint` / `test` (119, 9 files) green; `serializeReviewRow` is tested,
+`reviewsFor` is tested against a mocked client. **The action itself has never run** — same standing gap as
+`submitReview`. Most likely to be wrong: nothing in the query, which is `B6`'s already-exercised path; the
+risk is at the boundary — whether `SerializedReviewRow` survives the Server Action serialisation into
+Lane A's `"use client"` sheet, and whether they import the type with `import type` rather than a value
+import that would drag `server-only` into the client bundle.

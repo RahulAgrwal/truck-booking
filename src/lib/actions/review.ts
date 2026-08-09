@@ -5,8 +5,58 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { getDeal } from "@/lib/contact";
 import { prisma } from "@/lib/prisma";
-import { SubmitReviewSchema, firstIssue, type ActionResult } from "@/lib/schemas";
+import {
+  REVIEWS_SHEET_SIZE,
+  reviewsFor,
+  serializeReviewRow,
+  type SerializedReviewRow,
+} from "@/lib/reviews";
+import {
+  CarrierReviewsSchema,
+  SubmitReviewSchema,
+  firstIssue,
+  type ActionResult,
+} from "@/lib/schemas";
 import { requireSession } from "@/lib/session";
+
+/**
+ * One carrier's recent reviews, fetched when the accept-bid sheet opens.
+ *
+ * **Why an action rather than data on the page.** The shipper's auction detail
+ * page mounts `PollingRefresher`, which calls `router.refresh()` every 7s while
+ * the auction is live. Reading three reviews per bidding carrier in the page
+ * would therefore re-run one query per carrier every seven seconds, forever, to
+ * fill sheets that mostly never open. Fetching when the control is actually
+ * used costs one query at the moment someone asks for it.
+ *
+ * **No Rule 1 check, deliberately.** Reviews are public reputation (§2, Rule 2)
+ * — a shipper comparing four bids is *supposed* to read all four carriers'
+ * reviews before accepting anything. Routing this through `getDeal` would
+ * invert the feature.
+ */
+export async function getCarrierReviews(input: unknown): Promise<ActionResult<SerializedReviewRow[]>> {
+  /*
+    `requireSession`, not `requireRole("SHIPPER")` as the request asked for, and
+    the deviation is on purpose — two reasons, either sufficient:
+
+    1. `requireRole` now redirects a details-incomplete user to
+       /onboarding/details (B5). A *data fetch* that navigates the page out from
+       under an open sheet is a bad failure mode, and this action reads nothing
+       that user is not entitled to.
+    2. SHIPPER would be a guard that is not a security boundary — reviews are
+       public — so it would read like one and mislead. A carrier-side screen
+       wanting the same list later should not have to remove a fake check.
+
+    Strictly more permissive than requested, so no caller of theirs can break.
+  */
+  await requireSession();
+
+  const parsed = CarrierReviewsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, ...firstIssue(parsed.error) };
+
+  const rows = await reviewsFor(parsed.data.carrierId, parsed.data.take ?? REVIEWS_SHEET_SIZE);
+  return { ok: true, data: rows.map(serializeReviewRow) };
+}
 
 /** Prisma's unique-constraint violation — here, always @@unique([auctionId, authorId]). */
 const UNIQUE_VIOLATION = "P2002";

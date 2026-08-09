@@ -48,8 +48,31 @@ export type ReviewRow = {
   authorImage: string | null;
 };
 
+/**
+ * The same row with `createdAt` as an absolute ISO string.
+ *
+ * What crosses a Server Action boundary into a client component, per
+ * CLAUDE.md §6: never a precomputed "3 days ago", because RSC payloads are
+ * cached and a relative string goes stale in them; and a string rather than a
+ * `Date` so the value is inert on the way through.
+ *
+ * Import it with `import type` — this module is `server-only`.
+ */
+export type SerializedReviewRow = Omit<ReviewRow, "createdAt"> & { createdAt: string };
+
+export function serializeReviewRow(row: ReviewRow): SerializedReviewRow {
+  return { ...row, createdAt: row.createdAt.toISOString() };
+}
+
 /** How many reviews a profile shows before "see all" would be needed. */
 export const REVIEWS_PAGE_SIZE = 5;
+
+/**
+ * How many the accept-bid sheet shows. Smaller than a profile's page: the
+ * shipper is mid-decision with four bids in front of them, not reading a
+ * carrier's history.
+ */
+export const REVIEWS_SHEET_SIZE = 3;
 
 /**
  * Reviews *received* by `userId`, newest first.

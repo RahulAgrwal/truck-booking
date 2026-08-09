@@ -178,6 +178,18 @@ export const SubmitReviewSchema = z.object({
 
 export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
 
+/**
+ * Read one carrier's recent reviews, fetched when the accept-bid sheet opens.
+ *
+ * `take` is bounded even though the caller is our own sheet: it reaches the
+ * server as an untrusted number like any other, and an unbounded one is a way
+ * to ask for every review a carrier has ever received.
+ */
+export const CarrierReviewsSchema = z.object({
+  carrierId: z.string().uuid(),
+  take: z.coerce.number().int().min(1).max(20).optional(),
+});
+
 /** First zod issue as a flat `{ error, field }`, ready to return from an action. */
 export function firstIssue(error: z.ZodError): { error: string; field?: string } {
   const issue = error.issues[0];

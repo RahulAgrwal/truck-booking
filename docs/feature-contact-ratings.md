@@ -108,7 +108,7 @@ by it. **Conflating the two is the one way this feature leaks.**
 | `B9` | `[x]` | `getCarrierReviews` — Lane A's `A3` request in §4 | `B6` | `src/lib/actions/review.ts`, `src/lib/{reviews,schemas}.ts` | ✅ shipped · 119 tests green · **one deviation: `requireSession`, not `requireRole` — see §4** |
 | `B7` | `[x]` | Seed fixtures + run `db:seed` (announce first) | `B1` | `prisma/seed.ts` | ✅ **RUN — `A6`'s gate is OPEN.** 6 users · 9 auctions · 18 bids · 6 reviews. Dashboards work again. Fixture map below |
 
-> ### ✅ Lane B is complete — `B1`–`B8` all landed. Every Lane A gate is open.
+> ### ✅ Lane B is complete — `B1`–`B9` all landed. Every Lane A gate is open.
 >
 > Backend, migration, seed and contracts are all in `main`. Nothing on the Lane A table is waiting on me.
 > Ledger and the remaining verification worklist: [`docs/progress-B.md`](./progress-B.md).

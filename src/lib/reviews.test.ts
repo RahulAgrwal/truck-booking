@@ -9,9 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const findMany = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/prisma", () => ({ prisma: { review: { findMany } } }));
 
-const { REVIEWS_PAGE_SIZE, formatRating, raterSelect, ratingAverage, reviewsFor } = await import(
-  "./reviews"
-);
+const { REVIEWS_PAGE_SIZE, formatRating, raterSelect, ratingAverage, reviewsFor, serializeReviewRow } =
+  await import("./reviews");
 
 /** Columns that may only ever be selected inside `src/lib/contact.ts`. */
 const SENSITIVE_COLUMNS = ["phone", "address", "companyName", "truckNumber", "truckType"];
@@ -143,5 +142,37 @@ describe("reviewsFor", () => {
   it("returns an empty list for someone with no reviews", async () => {
     findMany.mockResolvedValueOnce([]);
     expect(await reviewsFor("user-1")).toEqual([]);
+  });
+});
+
+describe("serializeReviewRow", () => {
+  const row = {
+    id: "r1",
+    stars: 5,
+    comment: null,
+    createdAt: new Date("2026-08-01T10:00:00.000Z"),
+    authorName: "Anand Steelworks",
+    authorImage: null,
+  };
+
+  /**
+   * An absolute instant, never a precomputed "3 days ago". RSC payloads are
+   * cached, so a relative string goes stale inside one while an absolute
+   * timestamp lets the client recompute against its own clock (CLAUDE.md §6).
+   */
+  it("renders createdAt as an absolute ISO string", () => {
+    expect(serializeReviewRow(row).createdAt).toBe("2026-08-01T10:00:00.000Z");
+  });
+
+  it("changes nothing else", () => {
+    const { createdAt, ...rest } = serializeReviewRow(row);
+    expect(createdAt).toBeTypeOf("string");
+    expect(rest).toEqual({
+      id: "r1",
+      stars: 5,
+      comment: null,
+      authorName: "Anand Steelworks",
+      authorImage: null,
+    });
   });
 });
